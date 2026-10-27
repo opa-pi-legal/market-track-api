@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx-proxy
+    ports:
+      - "90:80"
+      - "443:443"
+    volumes:
+      # Mount host templates folder into the container
+      - ./nginx/templates:/etc/nginx/templates
+      # Mount host conf.d folder where Consul-Template will write the generated config
+    restart: always
