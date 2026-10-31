@@ -1,5 +1,13 @@
 
 services:
+  consul:
+    image: consul:1.15.4
+    container_name: consul-server
+    command: "agent -dev -client=0.0.0.0"
+    ports:
+      - "8500:8500"
+    restart: always
+  
   nginx:
     build:
       context: ./nginx
@@ -10,9 +18,12 @@ services:
     volumes:
       - ./nginx/templates:/etc/nginx/templates
       - ./nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - consul
     command: >
       sh -c "consul-template \
         -consul-addr=consul:8500 \
         -template='/etc/nginx/templates/nginx.conf.ctmpl:/etc/nginx/conf.d/default.conf:nginx -s reload' &
         nginx -g 'daemon off;'"
     restart: always
+
