@@ -8,9 +8,7 @@ services:
       - "90:80"
       - "443:443"
     volumes:
-      # Mount host templates folder into the container
       - ./nginx/templates:/etc/nginx/templates
-      # Mount host conf.d folder where Consul-Template will write the generated config
       - ./nginx/conf.d:/etc/nginx/conf.d
     command: >
       sh -c "consul-template \
