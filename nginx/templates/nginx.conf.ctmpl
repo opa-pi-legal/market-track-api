@@ -1,6 +1,6 @@
 upstream django_backend {
-    {{ range service "django-app" }}
-    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timout=10s;
+    {{ range service "user-api" }}
+    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
     
     {{ else }}
     server 127.0.0.1:8000 down;
@@ -16,7 +16,7 @@ server {
     location /static/ {
         alias /var/www/django/static/;
         expires 30d;
-        acess_log off;
+        access_log off;
     }
 
     location /media/ {
