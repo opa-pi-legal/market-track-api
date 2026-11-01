@@ -10,7 +10,7 @@ class MyAppConfig(AppConfig):
         if os.environ.get('RUN_MAIN') == 'false':
             return
         
-        service_address = os.environ.get("SERVICE_IP", "127.0.0.1")
+        service_address = os.environ.get("SERVICE_IP", "172.17.0.1")
         service_port = int(os.environ.get("SERVICE_PORT",8000))
         consul_address = os.environ.get("CONSUL_IP",'127.0.0.1')
         consul_port = int(os.environ.get("CONSUL_PORT",8500))
