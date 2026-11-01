@@ -31,7 +31,7 @@ server {
         access_log off;
     }
 
-    location /api/users/ {
+    location /users-api/ {
         proxy_pass http://django_user_backend;
 
         proxy_set_header Host $host;
