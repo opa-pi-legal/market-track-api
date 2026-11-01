@@ -21,3 +21,21 @@ services:
       - consul
     command: sh -c "consul-template -consul-addr=consul:8500 -template='/etc/nginx/templates/nginx.conf.ctmpl:/etc/nginx/conf.d/default.conf:nginx -s reload' & nginx -g 'daemon off;'"    
     restart: always
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: rebbitmq
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    env_file: ".env"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  rabbitmq-data:      
