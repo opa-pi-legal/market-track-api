@@ -27,7 +27,7 @@ class MyAppConfig(AppConfig):
                 address=service_address,
                 port=service_port,
                 check={
-                    'http': f'http://{service_address}:{service_port}/health/',
+                    'http': f'http://{service_address}:{service_port}/users-api/health/',
                     'interval': '10s',
                     'deregister_critical_service_after': '1m'
                 }
