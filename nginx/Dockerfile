@@ -1,6 +1,5 @@
 FROM nginx:latest
 
-# Instalar o curl and baixar o Consul-Template
 RUN apt-get update && apt-get install -y curl unzip && \
     VERSION="0.39.0" && \
     curl -LO https://releases.hashicorp.com/consul-template/${VERSION}/consul-template_${VERSION}_linux_amd64.zip && \
