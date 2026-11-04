@@ -22,4 +22,4 @@ class UserSerializer (serializers.ModelSerializer):
 class UserInGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInGroup
-        fields = ["userId","GroupId"]
+        fields = ["user_id","group_id"]
