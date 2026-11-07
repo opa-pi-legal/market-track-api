@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, UserInGroup
+from .models import User
 
 class UserSerializer (serializers.ModelSerializer):
     class Meta:
@@ -18,8 +18,3 @@ class UserSerializer (serializers.ModelSerializer):
         ]
         
         read_only_fields = ["created_at", "updated_at"]
-        
-class UserInGroupSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserInGroup
-        fields = ["user_id","group_id"]
