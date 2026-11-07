@@ -41,12 +41,12 @@ services:
   user-api:
     build: 
       context: .
-      dockerfile: userApi/Dockerfile
+      dockerfile: user_api/Dockerfile
     container_name: user_api_service
     restart: always
-    command: gunicorn userApi.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn user_api.wsgi:application --bind 0.0.0.0:8000
     volumes:
-      - ./userApi:/app
+      - ./user_api:/app
     ports:
       - "8000:8000"
     depends_on:
@@ -59,12 +59,12 @@ services:
   groups-api:
     build:
       context: .
-      dockerfile: groupsApi/dockerfile
+      dockerfile: groups_api/dockerfile
     container_name:  groups_api_service
     restart: always
-    command: gunicorn groupsApi.wsgi:application --bind 0.0.0.0:8001
+    command: gunicorn groups_api.wsgi:application --bind 0.0.0.0:8001
     volumes:
-      - ./groupsApi:/app
+      - ./groups_api:/app
     ports:
       - "8001:8001"
     depends_on:
