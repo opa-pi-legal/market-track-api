@@ -14,13 +14,6 @@ class User (models.Model):
     
     def __str__(self):
         return self.email
-
-class UserInGroup (models.Model):
-    group_id = models.CharField(max_length=255)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name="group_references")
-    
-    def __str__(self):
-        return f"{self.user.email} no Grupo {self.group_id}"
     
 class MarketId (models.Model):
     market_id = models.CharField(max_length=255)

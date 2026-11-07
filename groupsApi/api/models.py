@@ -13,3 +13,11 @@ class Groups (models.Model):
 
     def __str__(self):
         return self.name
+
+class UserInGroup (models.Model):
+    group = models.ForeignKey(Groups, on_delete=models.CASCADE)
+    user_id = models.CharField(max_length=255)
+                               
+    def __str__(self):
+        return f"{self.user.email} no Grupo {self.group_id}"
+    
