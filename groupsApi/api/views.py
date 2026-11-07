@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import Groups, UserInGroup
-from .serializers import GroupSerializer, UserInGroupSerializer
+from .models import Groups, UserInGroup, GroupInvite
+from .serializers import GroupSerializer, UserInGroupSerializer, GroupInviteSerialize
 from django.http import HttpResponse
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -11,6 +11,10 @@ class GroupViewSet(viewsets.ModelViewSet):
 class UserInGroupSet(viewsets.ModelViewSet):
     queryset = UserInGroup.objects.all()
     serializer_class = UserInGroupSerializer
+
+class GroupInviteSet(viewsets.ModelViewSet):
+    queryset = GroupInvite.objects.all()
+    serializer_class = GroupInviteSerialize
 
 def health_check(self):
     return HttpResponse("OK", status=200)
