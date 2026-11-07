@@ -1,4 +1,5 @@
 services:
+
   consul:
     image: consul:1.15.4
     container_name: consul-server
@@ -36,6 +37,42 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  user-api:
+    build: 
+      context: .
+      dockerfile: userApi/Dockerfile
+    container_name: user_api_service
+    restart: always
+    command: gunicorn userApi.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - ./userApi:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file: 
+     - .env
+  
+  groups-api:
+    build:
+      context: .
+      dockerfile: groupsApi/dockerfile
+    container_name:  groups_api_service
+    restart: always
+    command: gunicorn groupsApi.wsgi:application --bind 0.0.0.0:8001
+    volumes:
+      - ./groupsApi:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file:
+      - .env
 
 volumes:
   rabbitmq-data:      
