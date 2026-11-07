@@ -14,10 +14,29 @@ class Groups (models.Model):
     def __str__(self):
         return self.name
 
-class UserInGroup (models.Model):
-    group = models.ForeignKey(Groups, on_delete=models.CASCADE)
-    user_id = models.CharField(max_length=255)
-                               
+class UserInGroup(models.Model):
+    group = models.ForeignKey(Groups, on_delete=models.CASCADE, related_name="members")
+    user_id = models.CharField(max_length=128)
+    is_admin = models.BooleanField(default=False)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "group_members"
+
     def __str__(self):
-        return f"{self.user.email} no Grupo {self.group_id}"
-    
+        admin_status = "Admin" "Membro" if self.is_admin else "Membro"
+        return f"User {self.user_id} no Grupo {self.group.name} ({admin_status})"
+
+class GroupInvite(models.Model):
+    code = models.CharField(max_length=10, primary_key=True)
+    group = models.ForeignKey('Groups', on_delete=models.CASCADE, related_name="invites")
+    created_by = models.CharField(max_length=128)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "group_invites"  
+
+    def __str__(self):
+        status = "Ativo" if self.active else "Inativo"
+        return f"Convite {self.code} para o grupo {self.group.name} ({status})"
