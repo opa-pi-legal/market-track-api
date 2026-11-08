@@ -73,6 +73,24 @@ services:
       - rabbitmq
     env_file:
       - .env
+  
+  market-api:
+    build:
+      context: .
+      dockerfile: market_api/dockerfile
+    container_name:  market_api_service
+    restart: always
+    command: gunicorn market_api.wsgi:application --bind 0.0.0.0:8002
+    volumes:
+      - ./market_api:/app
+    ports:
+      - "8002:8002"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file:
+      - .env
 
 volumes:
   rabbitmq-data:      

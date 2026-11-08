@@ -32,6 +32,5 @@ class MyAppConfig(AppConfig):
                     'deregister_critical_service_after': '1m'
                 }
             )
-            print("SUCCESS: Registered with Consul!")
         except Exception as e:
             print(f"ERROR: Could not register with Consul: {e}")
