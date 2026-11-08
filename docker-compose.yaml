@@ -59,7 +59,7 @@ services:
   groups-api:
     build:
       context: .
-      dockerfile: groups_api/dockerfile
+      dockerfile: groups_api/Dockerfile
     container_name:  groups_api_service
     restart: always
     command: gunicorn groups_api.wsgi:application --bind 0.0.0.0:8001
@@ -77,7 +77,7 @@ services:
   market-api:
     build:
       context: .
-      dockerfile: market_api/dockerfile
+      dockerfile: market_api/Dockerfile
     container_name:  market_api_service
     restart: always
     command: gunicorn market_api.wsgi:application --bind 0.0.0.0:8002
@@ -95,7 +95,7 @@ services:
   group-invite-api:
     build:
       context: .
-      dockerfile: group_invite_api/dockerfile
+      dockerfile: group_invite_api/Dockerfile
     container_name:  group-invite-api_service
     restart: always
     command: gunicorn group_invite_api.wsgi:application --bind 0.0.0.0:8003
@@ -103,6 +103,24 @@ services:
       - ./group_invite_api:/app
     ports:
       - "8003:8003"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file:
+      - .env
+    
+  product-api:
+    build:
+      context: .
+      dockerfile: product_api/Dockerfile
+    container_name:  product-api_service
+    restart: always
+    command: gunicorn product_api.wsgi:application --bind 0.0.0.0:8004
+    volumes:
+      - ./product_api:/app
+    ports:
+      - "8004:8004"
     depends_on:
       - consul
       - nginx
