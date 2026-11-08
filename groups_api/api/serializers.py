@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Groups, UserInGroup, GroupInvite
+from .models import Groups, UserInGroup
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,11 +11,4 @@ class GroupSerializer(serializers.ModelSerializer):
 class UserInGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInGroup
-        fields = ["user_id","group"]
-        
-class GroupInviteSerialize(serializers.ModelSerializer):
-    class Meta:
-        model = GroupInvite
-        fields = ["code", "group","created_by", "active", "created_at"]
-        
-        read_only_fields = ["created_at"]
+        fields = ["user_id","group","is_admin","joined_at"]

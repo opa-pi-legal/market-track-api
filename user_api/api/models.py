@@ -15,10 +15,3 @@ class User (models.Model):
     def __str__(self):
         return self.email
     
-class MarketId (models.Model):
-    market_id = models.CharField(max_length=255)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name="favorite_markets")
-    
-    def __str__(self):
-        return f"{self.market_id} para {self.user.email}"
-    
