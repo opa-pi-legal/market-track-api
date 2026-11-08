@@ -1,5 +1,5 @@
 """
-URL configuration for userApi project.
+URL configuration for market_api project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/6.1/topics/http/urls/
@@ -20,7 +20,6 @@ from api.views import health_check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('users-api/api/', include('api.urls')),
-    path("users-api/health/", health_check, name="health_check"),
-
+    path('market-api/api/', include('api.urls')),
+    path("market-api/health/", health_check, name="health_check")
 ]

@@ -1,5 +1,5 @@
 """
-URL configuration for groupsApi project.
+URL configuration for user_api project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/6.1/topics/http/urls/
@@ -17,8 +17,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from api.views import health_check
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('groups-api/api/', include('api.urls')),
-    path("groups-api/health/", health_check, name="health_check")
+    path('users-api/api/', include('api.urls')),
+    path("users-api/health/", health_check, name="health_check"),
+
 ]
