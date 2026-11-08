@@ -46,6 +46,14 @@ upstream django_price_record_backend {
     {{ end }}
 }
 
+upstream django_shopping_list_backend {
+    {{ range service "shopping-list-api" }}
+    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
+    {{ else }}
+    server 172.17.0.1:8006 down;
+    {{ end }}
+}
+
 server {
     listen 80;
     
@@ -130,6 +138,20 @@ server {
 
     location /price-record-api/ {
         proxy_pass http://django_price_record_backend;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-Ip $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+
+    }
+
+    location /shopping-list-api/ {
+        proxy_pass http://django_shopping_list_backend;
 
         proxy_set_header Host $host;
         proxy_set_header X-Real-Ip $remote_addr;

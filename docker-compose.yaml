@@ -145,6 +145,25 @@ services:
       - rabbitmq
     env_file:
       - .env
+  
+  shopping-list-api:
+    build:
+      context: .
+      dockerfile: shopping_list_api/Dockerfile
+    container_name: shopping-list-api_service
+    restart: always
+    command: gunicorn shopping_list_api.wsgi:application --bind 0.0.0.0:8006
+    volumes:
+      - ./shopping_list_api:/app
+    ports:
+      - "8006:8006"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file:
+      - .env
+
 
 volumes:
   rabbitmq-data:      
