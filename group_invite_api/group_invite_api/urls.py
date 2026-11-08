@@ -20,5 +20,6 @@ from api.views import health_check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('group-invite-api/api/', include('api.urls')),
     path('group-invite-api/health/', health_check, name='health_check'),
 ]
