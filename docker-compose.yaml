@@ -127,6 +127,24 @@ services:
       - rabbitmq
     env_file:
       - .env
+  
+  price-record-api:
+    build:
+      context: .
+      dockerfile: price_record_api/Dockerfile
+    container_name: price-record-api_service
+    restart: always
+    command: gunicorn price_record_api.wsgi:application --bind 0.0.0.0:8005
+    volumes:
+      - ./price_record_api:/app
+    ports:
+      - "8005:8005"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file:
+      - .env
 
 volumes:
   rabbitmq-data:      
