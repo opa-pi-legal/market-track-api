@@ -139,4 +139,4 @@ GitHub.sublime-settings
 
 # nginx
 
-conf.d/default.conf
+/default.conf
