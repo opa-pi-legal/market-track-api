@@ -3,7 +3,7 @@ from django.apps import AppConfig
 import consul
 
 class MyAppConfig(AppConfig):
-    name = 'api'  # <-- MUST match your app folder name ('api')
+    name = 'api' 
 
     def ready(self):
         
