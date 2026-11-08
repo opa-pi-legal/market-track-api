@@ -91,6 +91,24 @@ services:
       - rabbitmq
     env_file:
       - .env
+  
+  group-invite-api:
+    build:
+      context: .
+      dockerfile: group_invite_api/dockerfile
+    container_name:  group-invite-api_service
+    restart: always
+    command: gunicorn group_invite_api.wsgi:application --bind 0.0.0.0:8003
+    volumes:
+      - ./group_invite_api:/app
+    ports:
+      - "8003:8003"
+    depends_on:
+      - consul
+      - nginx
+      - rabbitmq
+    env_file:
+      - .env
 
 volumes:
   rabbitmq-data:      
