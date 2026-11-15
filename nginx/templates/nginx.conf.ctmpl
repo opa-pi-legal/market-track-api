@@ -1,16 +1,8 @@
-upstream django_user_backend {
-    {{ range service "user-api" }}
+upstream django_core_backend {
+    {{ range service "core-api" }}
     server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
     {{ else }}
     server 172.17.0.1:8000 down;
-    {{ end }}
-}
-
-upstream django_groups_backend {
-    {{ range service "groups-api" }}
-    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
-    {{ else }}
-    server 172.17.0.1:8001 down;
     {{ end }}
 }
 
@@ -22,35 +14,11 @@ upstream django_market_backend {
     {{ end }}
 }
 
-upstream django_group_invite_backend {
-    {{ range service "group-invite-api" }}
-    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
-    {{ else }}
-    server 172.17.0.1:8003 down;
-    {{ end }}
-}
-
 upstream django_product_backend {
     {{ range service "product-api" }}
     server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
     {{ else }}
     server 172.17.0.1:8004 down;
-    {{ end }}
-}
-
-upstream django_price_record_backend {
-    {{ range service "price-record-api" }}
-    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
-    {{ else }}
-    server 172.17.0.1:8005 down;
-    {{ end }}
-}
-
-upstream django_shopping_list_backend {
-    {{ range service "shopping-list-api" }}
-    server {{ .Address }}:{{ .Port }} max_fails=3 fail_timeout=10s;
-    {{ else }}
-    server 172.17.0.1:8006 down;
     {{ end }}
 }
 
@@ -71,21 +39,8 @@ server {
         access_log off;
     }
 
-    location /users-api/ {
-        proxy_pass http://django_user_backend;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-Ip $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_connect_timeout 60s;
-        proxy_read_timeout 60s;
-        proxy_send_timeout 60s;
-    }
-
-    location /groups-api/ {
-        proxy_pass http://django_groups_backend;
+    location /core-api/ {
+        proxy_pass http://django_core_backend;
 
         proxy_set_header Host $host;
         proxy_set_header X-Real-Ip $remote_addr;
@@ -110,19 +65,6 @@ server {
         proxy_send_timeout 60s;
     }
 
-    location /group-invite-api/ {
-        proxy_pass http://django_group_invite_backend;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-Ip $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_connect_timeout 60s;
-        proxy_read_timeout 60s;
-        proxy_send_timeout 60s;
-    }
-
     location /product-api/ {
         proxy_pass http://django_product_backend;
 
@@ -134,33 +76,5 @@ server {
         proxy_connect_timeout 60s;
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
-    }
-
-    location /price-record-api/ {
-        proxy_pass http://django_price_record_backend;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-Ip $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_connect_timeout 60s;
-        proxy_read_timeout 60s;
-        proxy_send_timeout 60s;
-
-    }
-
-    location /shopping-list-api/ {
-        proxy_pass http://django_shopping_list_backend;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-Ip $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_connect_timeout 60s;
-        proxy_read_timeout 60s;
-        proxy_send_timeout 60s;
-
     }
 }
