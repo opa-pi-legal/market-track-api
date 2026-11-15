@@ -38,15 +38,15 @@ services:
       timeout: 5s
       retries: 20
 
-  user-api:
+  core-api:
     build: 
       context: .
-      dockerfile: user_api/Dockerfile
-    container_name: user_api_service
+      dockerfile: core_api/Dockerfile
+    container_name: core_api_service
     restart: always
-    command: gunicorn user_api.wsgi:application --bind 0.0.0.0:8000
+    command: gunicorn core_api.wsgi:application --bind 0.0.0.0:8000
     volumes:
-      - ./user_api:/app
+      - ./core_api:/app
     ports:
       - "8000:8000"
     depends_on:
@@ -55,24 +55,6 @@ services:
       - rabbitmq
     env_file: 
      - .env
-  
-  groups-api:
-    build:
-      context: .
-      dockerfile: groups_api/Dockerfile
-    container_name:  groups_api_service
-    restart: always
-    command: gunicorn groups_api.wsgi:application --bind 0.0.0.0:8001
-    volumes:
-      - ./groups_api:/app
-    ports:
-      - "8001:8001"
-    depends_on:
-      - consul
-      - nginx
-      - rabbitmq
-    env_file:
-      - .env
   
   market-api:
     build:
@@ -85,24 +67,6 @@ services:
       - ./market_api:/app
     ports:
       - "8002:8002"
-    depends_on:
-      - consul
-      - nginx
-      - rabbitmq
-    env_file:
-      - .env
-  
-  group-invite-api:
-    build:
-      context: .
-      dockerfile: group_invite_api/Dockerfile
-    container_name:  group-invite-api_service
-    restart: always
-    command: gunicorn group_invite_api.wsgi:application --bind 0.0.0.0:8003
-    volumes:
-      - ./group_invite_api:/app
-    ports:
-      - "8003:8003"
     depends_on:
       - consul
       - nginx
@@ -127,43 +91,6 @@ services:
       - rabbitmq
     env_file:
       - .env
-  
-  price-record-api:
-    build:
-      context: .
-      dockerfile: price_record_api/Dockerfile
-    container_name: price-record-api_service
-    restart: always
-    command: gunicorn price_record_api.wsgi:application --bind 0.0.0.0:8005
-    volumes:
-      - ./price_record_api:/app
-    ports:
-      - "8005:8005"
-    depends_on:
-      - consul
-      - nginx
-      - rabbitmq
-    env_file:
-      - .env
-  
-  shopping-list-api:
-    build:
-      context: .
-      dockerfile: shopping_list_api/Dockerfile
-    container_name: shopping-list-api_service
-    restart: always
-    command: gunicorn shopping_list_api.wsgi:application --bind 0.0.0.0:8006
-    volumes:
-      - ./shopping_list_api:/app
-    ports:
-      - "8006:8006"
-    depends_on:
-      - consul
-      - nginx
-      - rabbitmq
-    env_file:
-      - .env
-
 
 volumes:
   rabbitmq-data:      
