@@ -4,7 +4,8 @@ from .serializers import *
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework import viewsets
-from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from rest_framework import generics
 from django.http import HttpResponse
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -35,8 +36,10 @@ class ShoppingListItemViewSet(viewsets.ModelViewSet):
     queryset = ShoppingListItem.objects.all()
     serializer_class = ShoppingListItemSerializer
 
-class RegisterUserView(APIView):
-    permission_class = []
+class RegisterUserView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         
