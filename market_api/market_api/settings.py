@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv 
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-%796s*%+tl@q*dchf42$vz!&5hyb@@mgg0n(*%oc$j#vectgev'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG",False)
 
 ALLOWED_HOSTS = ['172.17.0.1', 'localhost', '127.0.0.1','market-api']
 
@@ -38,8 +42,32 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'api',
+    'drf_spectacular',
     'rest_framework',
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+SIMPLE_JWT = {
+    'ALGORITHM': 'RS256',
+    'SIGNING_KEY': None,
+    'VERIFYING_KEY': open('secrets/jwt_public.pem').read(),  
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Market API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMAS": False,
+    "SERVERS": [{"url": "/market-api"}, {"url": "http://localhost:90/market-api"}],
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -75,9 +103,14 @@ WSGI_APPLICATION = 'market_api.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "HOST" : os.environ.get("POSTGRES_HOST", "postgres"),
+        "PORT" : int(os.environ.get("POSTGRES_PORT", "5432")),
+        "NAME" : os.environ["POSTGRES_MARKET_DB"],
+        "USER": os.environ["POSTGRES_USER"],
+        "PASSWORD": os.environ["POSTGRES_PASSWORD"],
+        "CONN_MAX_AGE": 60,   
     }
 }
 

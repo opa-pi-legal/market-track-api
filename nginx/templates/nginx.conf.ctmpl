@@ -77,4 +77,8 @@ server {
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
     }
+
+    location /docs/ {
+        alias /etc/nginx/docs/;
+    }
 }

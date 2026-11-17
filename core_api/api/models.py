@@ -1,8 +1,8 @@
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-class User (models.Model):
-    display_name = models.CharField( default="Usuário" ,max_length=255)
-    email = models.EmailField( max_length=255)
+class User (AbstractUser):
+    email = models.EmailField(max_length=255, unique=True)       
     photo_url = models.URLField( null=True, blank=True)
     photo_public_id = models.CharField(max_length=255, null=True, blank=True)
     biometric_enabled = models.BooleanField(blank=True, default=False)
