@@ -48,6 +48,18 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+SIMPLE_JWT = {
+    'ALGORITHM': 'RS256',
+    'SIGNING_KEY': None,
+    'VERIFYING_KEY': open('secrets/jwt_public.pem').read(),  
 }
 
 SPECTACULAR_SETTINGS = {
@@ -55,7 +67,6 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMAS": False,
     "SERVERS": [{"url": "/market-api"}, {"url": "http://localhost:90/market-api"}],
-    # ← the gateway prefix, so "Try it out" works from the aggregated docs page
 }
 
 MIDDLEWARE = [

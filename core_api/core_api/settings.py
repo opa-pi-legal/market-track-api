@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-
+from datetime import timedelta
 load_dotenv()
 
 
@@ -47,16 +47,31 @@ INSTALLED_APPS = [
     'api',
 ]
 
+AUTH_USER_MODEL = 'api.User'
+
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated', 
+    ],
 }
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "ALGORITHM": "RS256",
+    "SIGNING_KEY": open('secrets/jwt_private.pem').read(),
+    "VERIFYING_KEY": open('secrets/jwt_public.pem').read(),
+}
+
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Core API",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMAS": False,
     "SERVERS": [{"url": "/core-api"}, {"url": "http://localhost:90/core-api"}],
-    # ← the gateway prefix, so "Try it out" works from the aggregated d ocs page
 }
 
 MIDDLEWARE = [
