@@ -1,0 +1,132 @@
+name: CI/CD Market-Track API
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Testes Unitários e Validação (3 Microserviços)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: core_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_CORE_DB: core_db
+      POSTGRES_MARKET_DB: market_db
+      POSTGRES_PRODUCT_DB: product_db
+      DJANGO_DEBUG: "True"
+      RUN_MAIN: "false"
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Instalar dependências
+        run: |
+          sudo apt-get update && sudo apt-get install -y libpq-dev
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Criar bancos market_db e product_db no PostgreSQL
+        run: |
+          python -c "
+          import psycopg
+          with psycopg.connect('host=127.0.0.1 port=5432 dbname=postgres user=postgres password=postgres', autocommit=True) as conn:
+              for db in ('market_db', 'product_db'):
+                  conn.execute(f'CREATE DATABASE {db}')
+          "
+
+      - name: Gerar chaves RSA efêmeras para testes JWT
+        run: |
+          for svc in core_api market_api product_api; do
+            mkdir -p "$svc/secrets"
+          done
+          openssl genrsa -out core_api/secrets/jwt_private.pem 2048
+          openssl rsa -in core_api/secrets/jwt_private.pem -pubout -out core_api/secrets/jwt_public.pem
+          cp core_api/secrets/jwt_public.pem market_api/secrets/jwt_public.pem
+          cp core_api/secrets/jwt_public.pem product_api/secrets/jwt_public.pem
+
+      - name: Validar e testar core_api (API + Moderação + RabbitMQ + Web)
+        working-directory: core_api
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test api --verbosity=2
+
+      - name: Validar e testar market_api
+        working-directory: market_api
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test api --verbosity=2
+
+      - name: Validar e testar product_api
+        working-directory: product_api
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test api --verbosity=2
+
+  deploy:
+    name: Deploy Automático na AWS EC2
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executar deploy via SSH na AWS EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AWS_EC2_HOST }}
+          username: ${{ secrets.AWS_EC2_USER }}
+          key: ${{ secrets.AWS_EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/market-track-api
+            git fetch origin main
+            git reset --hard origin/main
+
+            sudo docker compose up -d --build core-api market-api product-api nginx
+
+            echo "Aguardando containers ficarem prontos..."
+            sleep 6
+
+            sudo docker exec core_api_service python manage.py migrate --noinput
+            sudo docker exec market_api_service python manage.py migrate --noinput
+            sudo docker exec product-api_service python manage.py migrate --noinput
+            sudo docker exec product-api_service python manage.py seed_global_catalog
+
+            echo "Validando healthchecks pós-deploy..."
+            curl -fsS http://127.0.0.1:8090/core-api/health/
+            curl -fsS http://127.0.0.1:8090/market-api/health/
+            curl -fsS http://127.0.0.1:8090/product-api/health/
+            curl -fsS -o /dev/null http://127.0.0.1:8090/login/
+            echo "Deploy concluído com sucesso!"
