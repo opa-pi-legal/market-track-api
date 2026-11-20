@@ -1,6 +1,7 @@
 from django.apps import AppConfig
 import consul
 import os
+import sys
 
 class ApiConfig(AppConfig):
     name = 'api'
@@ -8,10 +9,12 @@ class ApiConfig(AppConfig):
     def ready(self):
         if os.environ.get('RUN_MAIN') == 'false':
             return
+        if any(cmd in sys.argv for cmd in ['makemigrations', 'migrate', 'collectstatic', 'test', 'consume_events']):
+            return
 
         service_address = os.environ.get("SERVICE_IP", "market-api")
         service_port = int(os.environ.get("SERVICE_PORT",8002))
-        consul_address = os.environ.get("CONSUL_IP",'172.17.0.1')
+        consul_address = os.environ.get("CONSUL_IP",'consul')
         consul_port = int(os.environ.get("CONSUL_PORT",8500))
         
         try:

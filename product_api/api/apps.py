@@ -1,4 +1,5 @@
 import os
+import sys
 from django.apps import AppConfig
 import consul
 
@@ -8,6 +9,8 @@ class MyAppConfig(AppConfig):
     def ready(self):
         
         if os.environ.get('RUN_MAIN') == 'false':
+            return
+        if any(cmd in sys.argv for cmd in ['makemigrations', 'migrate', 'collectstatic', 'test', 'consume_events']):
             return
         
         service_address = os.environ.get("SERVICE_IP", "product-api")
