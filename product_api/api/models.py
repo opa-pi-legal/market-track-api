@@ -8,6 +8,13 @@ class Product(models.Model):
         ('archived', 'Archived'),
     ]
 
+    SOURCE_CHOICES = [
+        ('group', 'Group'),
+        ('seed', 'Seed'),
+        ('openfoodfacts', 'OpenFoodFacts'),
+        ('admin', 'Admin'),
+    ]
+
     group_id = models.CharField(max_length=255)
     name = models.CharField(max_length=200)
     brand = models.CharField(max_length=100, blank=True, null=True)
@@ -17,6 +24,8 @@ class Product(models.Model):
     quantity = models.DecimalField(max_digits=10, decimal_places=3, default=1.0)
     photo_url = models.URLField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    is_global = models.BooleanField(default=False, db_index=True)
+    verified_source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='group')
     added_by = models.CharField(max_length=128) 
     created_at = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
