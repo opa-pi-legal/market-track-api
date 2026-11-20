@@ -16,10 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework.permissions import AllowAny
 from api.views import health_check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('market-api/api/', include('api.urls')),
+    path('market-api/schema/', SpectacularAPIView.as_view(permission_classes=[AllowAny]), name='schema'),
+    path('market-api/docs/', SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[AllowAny]), name='swagger-ui'),
     path("market-api/health/", health_check, name="health_check")
 ]
