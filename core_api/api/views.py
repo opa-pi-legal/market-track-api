@@ -1,16 +1,19 @@
 import uuid
+from datetime import timedelta
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .messaging import publish_event
+from .moderation import DAILY_OFFER_LIMIT, bounding_box, haversine_km
 from .models import (
     ActivityLog,
     CommunityOffer,
@@ -389,15 +392,51 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
     serializer_class = CommunityOfferSerializer
     permission_classes = [IsAuthenticated]
 
+    def _parse_geo_params(self):
+        lat_raw = self.request.query_params.get('lat')
+        lng_raw = self.request.query_params.get('lng')
+        radius_raw = (self.request.query_params.get('radius_km') or '').strip().lower()
+
+        lat = lng = radius_km = None
+        if lat_raw and lng_raw:
+            try:
+                lat = float(lat_raw)
+                lng = float(lng_raw)
+            except ValueError:
+                lat = lng = None
+
+        if radius_raw in ('all', 'none', '0', 'sem_limite'):
+            radius_km = None
+        elif radius_raw:
+            try:
+                val = float(radius_raw.replace(',', '.'))
+                if 1 <= val <= 500:
+                    radius_km = val
+            except ValueError:
+                radius_km = None
+        elif lat is not None and lng is not None:
+            pref = getattr(self.request.user, 'preferred_radius_km', 30)
+            radius_km = float(pref) if pref else None
+
+        return lat, lng, radius_km
+
     def get_queryset(self):
-        queryset = CommunityOffer.objects.all()
+        queryset = CommunityOffer.objects.select_related('reported_by').all()
         active_only = self.request.query_params.get('active_only', 'true').lower() in ('true', '1', 'yes')
-        if active_only:
-            queryset = queryset.filter(is_active=True)
+        mod_param = (self.request.query_params.get('moderation_status') or '').strip().lower()
+
+        if self.request.user.is_staff and mod_param:
+            if mod_param != 'all':
+                queryset = queryset.filter(moderation_status=mod_param)
+        else:
+            queryset = queryset.filter(moderation_status='approved')
+            if active_only:
+                queryset = queryset.filter(is_active=True)
 
         scope = (self.request.query_params.get('scope') or '').strip().lower()
         group_id = self.request.query_params.get('group') or self.request.query_params.get('group_id')
         category = (self.request.query_params.get('category') or '').strip()
+        city = (self.request.query_params.get('city') or '').strip()
         ean = (self.request.query_params.get('ean') or '').strip()
         q = (self.request.query_params.get('q') or '').strip()
 
@@ -414,6 +453,8 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
 
         if category:
             queryset = queryset.filter(category__iexact=category)
+        if city:
+            queryset = queryset.filter(city__icontains=city)
         if ean:
             queryset = queryset.filter(ean=ean)
         if q:
@@ -421,16 +462,72 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
                 Q(product_name__icontains=q)
                 | Q(brand__icontains=q)
                 | Q(market_name__icontains=q)
+                | Q(city__icontains=q)
                 | Q(ean__icontains=q)
             )
 
+        lat, lng, radius_km = self._parse_geo_params()
+        strict_geo = self.request.query_params.get('strict_geo', 'false').lower() in ('true', '1', 'yes')
+        if lat is not None and lng is not None and radius_km is not None:
+            min_lat, max_lat, min_lng, max_lng = bounding_box(lat, lng, radius_km)
+            geo_q = Q(
+                latitude__gte=min_lat,
+                latitude__lte=max_lat,
+                longitude__gte=min_lng,
+                longitude__lte=max_lng,
+            )
+            if not strict_geo:
+                geo_q = geo_q | Q(latitude__isnull=True) | Q(longitude__isnull=True)
+            queryset = queryset.filter(geo_q)
+
         return queryset.order_by('-is_promotion', '-discount_percent', '-created_at')
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        lat, lng, radius_km = self._parse_geo_params()
+        strict_geo = request.query_params.get('strict_geo', 'false').lower() in ('true', '1', 'yes')
+
+        offers = list(queryset)
+        if lat is not None and lng is not None:
+            filtered = []
+            for offer in offers:
+                if offer.latitude is not None and offer.longitude is not None:
+                    dist = haversine_km(lat, lng, offer.latitude, offer.longitude)
+                    offer._distance_km = dist
+                    if radius_km is None or dist <= radius_km:
+                        filtered.append(offer)
+                elif not strict_geo:
+                    offer._distance_km = None
+                    filtered.append(offer)
+            offers = filtered
+
+        serializer = self.get_serializer(offers, many=True)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
-        offer = serializer.save(reported_by=self.request.user)
+        user = self.request.user
+        group = serializer.validated_data.get('group')
+
+        if user.community_banned and group is None:
+            raise PermissionDenied(
+                'Sua conta está restrita para publicações na comunidade global.'
+            )
+
+        if not user.is_staff:
+            since = timezone.now() - timedelta(hours=24)
+            recent_count = CommunityOffer.objects.filter(
+                reported_by=user,
+                created_at__gte=since,
+            ).count()
+            if recent_count >= DAILY_OFFER_LIMIT:
+                raise ValidationError(
+                    {'detail': f'Limite diário de {DAILY_OFFER_LIMIT} ofertas atingido.'}
+                )
+
+        offer = serializer.save(reported_by=user)
         OfferVote.objects.get_or_create(
             offer=offer,
-            user=self.request.user,
+            user=user,
             defaults={'vote_type': 'confirm'},
         )
         publish_event(
@@ -441,8 +538,10 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
                 'product_name': offer.product_name,
                 'market_name': offer.market_name,
                 'price_cents': offer.price_cents,
+                'latitude': offer.latitude,
+                'longitude': offer.longitude,
                 'group_id': offer.group_id,
-                'reported_by_id': self.request.user.id,
+                'reported_by_id': user.id,
             },
         )
 
@@ -450,9 +549,9 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
     def vote(self, request, pk=None):
         offer = self.get_object()
         vote_type = (request.data.get('vote_type') or '').strip().lower()
-        if vote_type not in ('confirm', 'expired'):
+        if vote_type not in ('confirm', 'expired', 'abuse'):
             return Response(
-                {'detail': 'vote_type must be "confirm" or "expired".'},
+                {'detail': 'vote_type must be "confirm", "expired", or "abuse".'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -463,20 +562,70 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
         )
         confirmations_count = OfferVote.objects.filter(offer=offer, vote_type='confirm').count()
         reports_count = OfferVote.objects.filter(offer=offer, vote_type='expired').count()
+        abuse_reports_count = OfferVote.objects.filter(offer=offer, vote_type='abuse').count()
         offer.confirmations_count = confirmations_count
         offer.reports_count = reports_count
-        offer.save(update_fields=['confirmations_count', 'reports_count', 'updated_at'])
+        offer.abuse_reports_count = abuse_reports_count
 
-        publish_event(
-            'offer.voted',
-            {
-                'offer_id': offer.id,
-                'user_id': request.user.id,
-                'vote_type': vote_type,
-                'confirmations_count': confirmations_count,
-                'reports_count': reports_count,
-            },
-        )
+        update_fields = ['confirmations_count', 'reports_count', 'abuse_reports_count', 'updated_at']
+        if vote_type == 'abuse' and (abuse_reports_count >= 2 or request.user.is_staff):
+            offer.is_active = False
+            offer.moderation_status = 'flagged'
+            update_fields.extend(['is_active', 'moderation_status'])
+
+        offer.save(update_fields=update_fields)
+
+        if vote_type == 'abuse':
+            publish_event(
+                'offer.flagged',
+                {
+                    'offer_id': offer.id,
+                    'user_id': request.user.id,
+                    'is_staff': request.user.is_staff,
+                    'abuse_reports_count': abuse_reports_count,
+                },
+            )
+        else:
+            publish_event(
+                'offer.voted',
+                {
+                    'offer_id': offer.id,
+                    'user_id': request.user.id,
+                    'vote_type': vote_type,
+                    'confirmations_count': confirmations_count,
+                    'reports_count': reports_count,
+                },
+            )
+        return Response(self.get_serializer(offer).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='moderate')
+    def moderate(self, request, pk=None):
+        if not request.user.is_staff:
+            raise PermissionDenied('Apenas moderadores podem executar esta ação.')
+
+        offer = get_object_or_404(CommunityOffer, pk=pk)
+        mod_action = (request.data.get('action') or '').strip().lower()
+        if mod_action == 'approve':
+            offer.moderation_status = 'approved'
+            offer.is_active = True
+            offer.save(update_fields=['moderation_status', 'is_active', 'updated_at'])
+        elif mod_action == 'remove':
+            offer.moderation_status = 'removed'
+            offer.is_active = False
+            offer.save(update_fields=['moderation_status', 'is_active', 'updated_at'])
+        elif mod_action == 'ban_author':
+            offer.moderation_status = 'removed'
+            offer.is_active = False
+            offer.save(update_fields=['moderation_status', 'is_active', 'updated_at'])
+            if offer.reported_by:
+                offer.reported_by.community_banned = True
+                offer.reported_by.save(update_fields=['community_banned', 'updated_at'])
+        else:
+            return Response(
+                {'detail': 'action deve ser "approve", "remove" ou "ban_author".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response(self.get_serializer(offer).data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='stats')
@@ -557,6 +706,7 @@ class RegisterUserView(generics.CreateAPIView):
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
+            refresh['is_staff'] = user.is_staff
             return Response(
                 {
                     'id': user.id,
@@ -605,6 +755,7 @@ class FlexibleLoginView(APIView):
             )
 
         refresh = RefreshToken.for_user(user)
+        refresh['is_staff'] = user.is_staff
         return Response(
             {
                 'access': str(refresh.access_token),
@@ -649,6 +800,7 @@ class GoogleLoginView(APIView):
                 user.save(update_fields=['photo_url', 'updated_at'])
 
         refresh = RefreshToken.for_user(user)
+        refresh['is_staff'] = user.is_staff
         return Response(
             {
                 'access': str(refresh.access_token),

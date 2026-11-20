@@ -93,6 +93,42 @@ def _handle_offer_voted(payload: dict) -> None:
     offer.save(update_fields=['confirmations_count', 'reports_count', 'is_active', 'updated_at'])
 
 
+def _handle_offer_flagged(payload: dict) -> None:
+    offer_id = payload.get('offer_id')
+    offer = CommunityOffer.objects.select_related('reported_by').filter(id=offer_id).first()
+    if not offer:
+        return
+
+    abuse_count = OfferVote.objects.filter(offer=offer, vote_type='abuse').count()
+    offer.abuse_reports_count = abuse_count
+
+    reporter_id = payload.get('user_id')
+    reporter_is_guardian = False
+    if reporter_id:
+        total_rep = (
+            CommunityOffer.objects.filter(reported_by_id=reporter_id).count()
+            + OfferVote.objects.filter(user_id=reporter_id, vote_type='confirm').count()
+        )
+        reporter_is_guardian = total_rep >= 10
+
+    update_fields = ['abuse_reports_count', 'updated_at']
+    if abuse_count >= 2 or payload.get('is_staff') or reporter_is_guardian:
+        offer.is_active = False
+        offer.moderation_status = 'flagged'
+        update_fields.extend(['is_active', 'moderation_status'])
+
+    offer.save(update_fields=update_fields)
+
+    if offer.reported_by and not offer.reported_by.is_staff:
+        bad_offers = CommunityOffer.objects.filter(
+            reported_by=offer.reported_by,
+            moderation_status__in=('flagged', 'removed'),
+        ).count()
+        if bad_offers >= 3 and not offer.reported_by.community_banned:
+            offer.reported_by.community_banned = True
+            offer.reported_by.save(update_fields=['community_banned', 'updated_at'])
+
+
 def _handle_price_recorded(payload: dict) -> None:
     group_id = payload.get('group_id')
     product_id = str(payload.get('product_id', ''))
@@ -148,6 +184,8 @@ def handle_event(routing_key: str, payload: dict) -> None:
         _handle_offer_published(payload)
     elif routing_key == 'offer.voted':
         _handle_offer_voted(payload)
+    elif routing_key == 'offer.flagged':
+        _handle_offer_flagged(payload)
     elif routing_key == 'price.recorded':
         _handle_price_recorded(payload)
     elif routing_key.startswith('activity.'):
@@ -160,6 +198,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         start_consumer(
             queue_name='core_api.events',
-            binding_keys=['offer.published', 'offer.voted', 'price.recorded', 'activity.#'],
+            binding_keys=['offer.published', 'offer.voted', 'offer.flagged', 'price.recorded', 'activity.#'],
             handler_fn=handle_event,
         )

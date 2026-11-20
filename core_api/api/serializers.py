@@ -1,5 +1,10 @@
 import uuid
 from rest_framework import serializers
+from .moderation import (
+    contains_inappropriate_content,
+    is_valid_ean,
+    validate_price_cents,
+)
 from .models import (
     ActivityLog,
     CommunityOffer,
@@ -26,10 +31,18 @@ class UserSerializer(serializers.ModelSerializer):
             'photo_public_id',
             'biometric_enabled',
             'last_active_group',
+            'preferred_radius_km',
+            'community_banned',
+            'is_staff',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'community_banned', 'is_staff', 'created_at', 'updated_at']
+
+    def validate_preferred_radius_km(self, value):
+        if value is not None and (value < 1 or value > 500):
+            raise serializers.ValidationError('O raio deve estar entre 1 e 500 km.')
+        return value
 
 
 class GroupSerializer(serializers.ModelSerializer):
@@ -141,6 +154,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 class CommunityOfferSerializer(serializers.ModelSerializer):
     my_vote = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
+    reported_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = CommunityOffer
@@ -151,16 +166,23 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
             'brand',
             'category',
             'market_name',
+            'city',
+            'latitude',
+            'longitude',
             'price_cents',
             'reference_avg_cents',
             'discount_percent',
             'is_promotion',
             'confirmations_count',
             'reports_count',
+            'abuse_reports_count',
+            'moderation_status',
             'is_active',
             'group',
             'my_vote',
             'is_mine',
+            'distance_km',
+            'reported_by_name',
             'created_at',
         ]
         read_only_fields = [
@@ -169,11 +191,36 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
             'discount_percent',
             'confirmations_count',
             'reports_count',
+            'abuse_reports_count',
+            'moderation_status',
             'is_active',
             'my_vote',
             'is_mine',
+            'distance_km',
+            'reported_by_name',
             'created_at',
         ]
+
+    def validate(self, attrs):
+        for field in ('product_name', 'brand', 'market_name', 'city'):
+            val = attrs.get(field)
+            if val and contains_inappropriate_content(val):
+                raise serializers.ValidationError(
+                    {field: 'Conteúdo impróprio detectado. Revise o texto informado.'}
+                )
+
+        price_cents = attrs.get('price_cents')
+        if price_cents is not None:
+            ok, err = validate_price_cents(price_cents)
+            if not ok:
+                raise serializers.ValidationError({'price_cents': err})
+
+        ean = (attrs.get('ean') or '').strip()
+        if ean and not is_valid_ean(ean):
+            raise serializers.ValidationError(
+                {'ean': 'Código de barras EAN inválido (use 8, 12, 13 ou 14 dígitos válidos).'}
+            )
+        return attrs
 
     def get_my_vote(self, obj):
         request = self.context.get('request')
@@ -192,6 +239,15 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return False
         return obj.reported_by_id == user.id
+
+    def get_distance_km(self, obj):
+        dist = getattr(obj, '_distance_km', None)
+        return round(dist, 1) if dist is not None else None
+
+    def get_reported_by_name(self, obj):
+        if not obj.reported_by:
+            return 'Comunidade'
+        return obj.reported_by.first_name or obj.reported_by.username
 
 
 class PriceAlertSerializer(serializers.ModelSerializer):

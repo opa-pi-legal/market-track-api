@@ -15,6 +15,8 @@ class User(AbstractUser):
         related_name='active_users',
     )
     last_active_group_updated_at = models.DateTimeField(null=True, blank=True)
+    preferred_radius_km = models.PositiveIntegerField(default=30, null=True, blank=True)
+    community_banned = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -157,17 +159,32 @@ class ShoppingListItem(models.Model):
 
 
 class CommunityOffer(models.Model):
+    MODERATION_CHOICES = [
+        ('approved', 'Approved'),
+        ('flagged', 'Flagged'),
+        ('removed', 'Removed'),
+    ]
+
     ean = models.CharField(max_length=64, blank=True, default='', db_index=True)
     product_name = models.CharField(max_length=160)
     brand = models.CharField(max_length=128, blank=True, default='')
     category = models.CharField(max_length=64, default='Geral')
     market_name = models.CharField(max_length=128)
+    city = models.CharField(max_length=100, blank=True, default='')
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     price_cents = models.PositiveIntegerField()
     reference_avg_cents = models.PositiveIntegerField(null=True, blank=True)
     discount_percent = models.IntegerField(default=0)
     is_promotion = models.BooleanField(default=True)
     confirmations_count = models.PositiveIntegerField(default=1)
     reports_count = models.PositiveIntegerField(default=0)
+    abuse_reports_count = models.PositiveIntegerField(default=0)
+    moderation_status = models.CharField(
+        max_length=16,
+        choices=MODERATION_CHOICES,
+        default='approved',
+    )
     is_active = models.BooleanField(default=True)
     reported_by = models.ForeignKey(
         'User',
@@ -197,6 +214,7 @@ class OfferVote(models.Model):
     VOTE_CHOICES = [
         ('confirm', 'Confirm'),
         ('expired', 'Expired'),
+        ('abuse', 'Abuse'),
     ]
 
     offer = models.ForeignKey(
