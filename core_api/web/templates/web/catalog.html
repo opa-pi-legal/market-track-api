@@ -1,0 +1,202 @@
+{% extends "web/base.html" %}
+{% block title %}Mercados &amp; Produtos — Market-Track Web{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Catálogo &amp; Grupo</h1>
+    <p class="text-sm text-slate-500">Gerencie mercados, produtos (privados do grupo + Catálogo Global validado) e convites.</p>
+  </div>
+</div>
+
+<!-- Abas -->
+<div class="flex gap-2 mb-6 border-b border-slate-200 pb-3 text-sm font-semibold">
+  <a href="/catalogo/?tab=produtos" class="px-4 py-2 rounded-xl transition {% if tab == 'produtos' %}bg-slate-900 text-white{% else %}bg-white text-slate-600 border border-slate-200 hover:border-emerald-400{% endif %}">
+    🛒 Produtos ({{ products|length }})
+  </a>
+  <a href="/catalogo/?tab=mercados" class="px-4 py-2 rounded-xl transition {% if tab == 'mercados' %}bg-slate-900 text-white{% else %}bg-white text-slate-600 border border-slate-200 hover:border-emerald-400{% endif %}">
+    🏪 Mercados ({{ markets|length }})
+  </a>
+  <a href="/catalogo/?tab=grupo" class="px-4 py-2 rounded-xl transition {% if tab == 'grupo' %}bg-slate-900 text-white{% else %}bg-white text-slate-600 border border-slate-200 hover:border-emerald-400{% endif %}">
+    👥 Grupo &amp; Convites ({{ members|length }})
+  </a>
+</div>
+
+{% if tab == 'mercados' %}
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 h-fit">
+    <h2 class="font-bold text-slate-900 mb-3">Cadastrar Mercado</h2>
+    <form method="post" action="{% url 'web:create_market' %}" class="space-y-3">
+      {% csrf_token %}
+      <input name="name" required placeholder="Nome (ex.: Atacadão Centro)"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <input name="brand" placeholder="Rede / Bandeira (opcional)"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <input name="address" placeholder="Endereço completo"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <input name="city" placeholder="Cidade (ex.: São Paulo)"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <div class="grid grid-cols-2 gap-2">
+        <input name="latitude" placeholder="Latitude (opcional)"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs">
+        <input name="longitude" placeholder="Longitude (opcional)"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs">
+      </div>
+      <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm">
+        + Salvar mercado
+      </button>
+    </form>
+  </div>
+
+  <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    {% if markets %}
+    <table class="w-full text-left border-collapse text-sm">
+      <thead>
+        <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
+          <th class="py-3 px-4">Mercado</th>
+          <th class="py-3 px-4">Endereço / Cidade</th>
+          <th class="py-3 px-4">Mapa</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for m in markets %}
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 px-4">
+            <div class="font-semibold text-slate-900">{{ m.name }}</div>
+            {% if m.brand %}<div class="text-xs text-slate-500">{{ m.brand }}</div>{% endif %}
+          </td>
+          <td class="py-3 px-4 text-xs text-slate-600">
+            <div>{{ m.address|default:"-" }}</div>
+            {% if m.city %}<div class="text-slate-400">{{ m.city }}</div>{% endif %}
+          </td>
+          <td class="py-3 px-4 text-xs">
+            <a target="_blank" rel="noopener"
+               href="{% if m.latitude and m.longitude %}https://www.google.com/maps/search/?api=1&query={{ m.latitude }},{{ m.longitude }}{% else %}https://www.google.com/maps/search/?api=1&query={{ m.name|urlencode }}{% endif %}"
+               class="text-sky-600 font-semibold hover:underline">Google Maps</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="p-10 text-center text-sm text-slate-400">Nenhum mercado cadastrado neste grupo ainda.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% elif tab == 'grupo' %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+    <h2 class="font-bold text-slate-900 mb-3">Membros do Grupo</h2>
+    <div class="divide-y divide-slate-100 text-sm">
+      {% for mem in members %}
+      <div class="py-3 flex items-center justify-between">
+        <div>
+          <div class="font-semibold text-slate-900">{{ mem.user.username }}</div>
+          <div class="text-xs text-slate-500">{{ mem.user.email }}</div>
+        </div>
+        <span class="text-xs font-semibold px-2.5 py-1 rounded-full {% if mem.is_admin %}bg-emerald-100 text-emerald-800{% else %}bg-slate-100 text-slate-600{% endif %}">
+          {% if mem.is_admin %}Admin{% else %}Membro{% endif %}
+        </span>
+      </div>
+      {% empty %}
+        <div class="text-sm text-slate-400">Sem membros cadastrados.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-bold text-slate-900">Códigos de Convite</h2>
+      <form method="post" action="{% url 'web:create_invite' %}">
+        {% csrf_token %}
+        <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+          + Gerar código
+        </button>
+      </form>
+    </div>
+    <div class="space-y-2">
+      {% for inv in invites %}
+      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+        <span class="font-mono font-bold text-base tracking-widest text-slate-900">{{ inv.code }}</span>
+        <span class="text-xs text-slate-400">{{ inv.created_at|date:"d/m/Y H:i" }}</span>
+      </div>
+      {% empty %}
+        <div class="text-sm text-slate-400">Nenhum convite ativo. Clique em "Gerar código" para convidar alguém.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 h-fit">
+    <h2 class="font-bold text-slate-900 mb-1">Cadastrar Produto (Privado do Grupo)</h2>
+    <p class="text-xs text-slate-500 mb-3">Produtos cadastrados manualmente ficam visíveis apenas no seu grupo por segurança.</p>
+    <form method="post" action="{% url 'web:create_product' %}" class="space-y-3">
+      {% csrf_token %}
+      <input name="name" required placeholder="Nome (ex.: Leite Integral 1L)"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <input name="brand" placeholder="Marca (opcional)"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <div class="grid grid-cols-2 gap-2">
+        <input name="category" value="Geral" placeholder="Categoria"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        <input name="unit" value="un" placeholder="Unidade (un, kg, pct)"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <input name="barcode" placeholder="Código de barras EAN (opcional)"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm">
+        + Salvar produto
+      </button>
+    </form>
+  </div>
+
+  <div class="lg:col-span-8 space-y-4">
+    <form method="get" action="/catalogo/" class="flex gap-2">
+      <input type="hidden" name="tab" value="produtos">
+      <input name="q" value="{{ q }}" placeholder="Buscar no catálogo do grupo e global..."
+             class="flex-1 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm">
+      <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold">Buscar</button>
+    </form>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {% if products %}
+      <table class="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
+            <th class="py-3 px-4">Produto</th>
+            <th class="py-3 px-4">Categoria</th>
+            <th class="py-3 px-4">EAN</th>
+            <th class="py-3 px-4">Origem</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for p in products %}
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 px-4">
+              <div class="font-semibold text-slate-900">{{ p.name }}</div>
+              {% if p.brand %}<div class="text-xs text-slate-500">{{ p.brand }}</div>{% endif %}
+            </td>
+            <td class="py-3 px-4 text-xs text-slate-600">{{ p.category }}</td>
+            <td class="py-3 px-4 font-mono text-xs text-slate-500">{{ p.barcode|default:"-" }}</td>
+            <td class="py-3 px-4">
+              {% if p.is_global %}
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">🌐 Global verificado</span>
+              {% else %}
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">🔒 Grupo</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <div class="p-10 text-center text-sm text-slate-400">Nenhum produto encontrado.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

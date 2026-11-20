@@ -1,0 +1,268 @@
+{% extends "web/base.html" %}
+{% block title %}Radar da Comunidade — Market-Track Web{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Radar da Comunidade</h1>
+    <p class="text-sm text-slate-500">Compare ofertas em tabela, ajuste o raio de distância em km e publique promoções direto no RabbitMQ.</p>
+  </div>
+  <button type="button" onclick="document.getElementById('modal-publish-offer').showModal()"
+          class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm transition">
+    + Publicar Oferta
+  </button>
+</div>
+
+<!-- Filtros + Raio Configurável -->
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-6 space-y-4">
+  <form id="community-filter-form"
+        hx-get="{% url 'web:community' %}"
+        hx-target="#community-table-wrap"
+        hx-swap="innerHTML"
+        hx-trigger="change, submit, keyup delay:350ms from:#q-input"
+        class="grid grid-cols-1 md:grid-cols-12 gap-3">
+    <input type="hidden" name="lat" id="geo-lat" value="{{ lat|default:'' }}">
+    <input type="hidden" name="lng" id="geo-lng" value="{{ lng|default:'' }}">
+    <input type="hidden" name="radius_km" id="radius-hidden" value="{{ selected_radius }}">
+
+    <div class="md:col-span-5">
+      <input id="q-input" name="q" value="{{ q }}" placeholder="Buscar produto, marca, mercado, cidade ou EAN..."
+             class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+    </div>
+
+    <div class="md:col-span-2">
+      <select name="scope" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500">
+        <option value="community" {% if scope == 'community' %}selected{% endif %}>Toda Comunidade</option>
+        <option value="group" {% if scope == 'group' %}selected{% endif %}>Apenas meu Grupo</option>
+      </select>
+    </div>
+
+    <div class="md:col-span-2">
+      <select name="category" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500">
+        <option value="">Todas categorias</option>
+        {% for cat in categories %}
+          <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="md:col-span-3">
+      <select name="sort" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500">
+        <option value="discount" {% if sort == 'discount' %}selected{% endif %}>Ordenar: Maior desconto</option>
+        <option value="price" {% if sort == 'price' %}selected{% endif %}>Ordenar: Menor preço</option>
+        <option value="confirmed" {% if sort == 'confirmed' %}selected{% endif %}>Ordenar: Mais confirmadas</option>
+        <option value="recent" {% if sort == 'recent' %}selected{% endif %}>Ordenar: Mais recentes</option>
+        <option value="distance" {% if sort == 'distance' %}selected{% endif %}>Ordenar: Mais próximas</option>
+      </select>
+    </div>
+  </form>
+
+  <!-- Barra de Raio Configurável (Opções + Campo Livre) -->
+  <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs font-semibold text-slate-600">📍 Raio de distância:</span>
+      {% for r in radius_presets %}
+        <button type="button" onclick="applyRadius('{{ r }}')"
+                class="radius-chip px-3 py-1 rounded-full text-xs font-semibold border transition {% if selected_radius == r %}bg-emerald-600 text-white border-emerald-600{% else %}bg-slate-50 text-slate-700 border-slate-200 hover:border-emerald-400{% endif %}"
+                data-radius="{{ r }}">
+          {{ r }} km
+        </button>
+      {% endfor %}
+      <button type="button" onclick="applyRadius('all')"
+              class="radius-chip px-3 py-1 rounded-full text-xs font-semibold border transition {% if selected_radius == 'all' %}bg-emerald-600 text-white border-emerald-600{% else %}bg-slate-50 text-slate-700 border-slate-200 hover:border-emerald-400{% endif %}"
+              data-radius="all">
+        Sem limite
+      </button>
+
+      <!-- Campo livre numérico em km -->
+      <div class="flex items-center gap-1.5 ml-1">
+        <input id="custom-radius-input" type="number" min="1" max="500" placeholder="Outro km"
+               value="{% if selected_radius != 'all' and selected_radius not in radius_presets %}{{ selected_radius }}{% endif %}"
+               class="w-24 rounded-lg border border-slate-300 px-2.5 py-1 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        <button type="button" onclick="applyCustomRadius()"
+                class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold">
+          Aplicar km
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button type="button" onclick="detectLocation()"
+              class="px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-semibold transition">
+        🎯 {% if lat and lng %}Localização ativa{% else %}Usar minha localização{% endif %}
+      </button>
+      <form method="post" action="{% url 'web:save_radius' %}" id="save-radius-form" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="radius_km" id="save-radius-value" value="{{ selected_radius }}">
+        <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">
+          Salvar como padrão
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Tabela de Ofertas -->
+<div id="community-table-wrap">
+  {% include "web/partials/community_table.html" %}
+</div>
+
+<!-- Modal Publicar Oferta -->
+<dialog id="modal-publish-offer" class="rounded-2xl p-0 w-full max-w-lg shadow-2xl backdrop:bg-slate-900/60">
+  <form method="post" action="{% url 'web:publish_offer' %}" class="p-6 space-y-3.5">
+    {% csrf_token %}
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="text-lg font-bold text-slate-900">Publicar Oferta na Comunidade</h3>
+      <button type="button" onclick="document.getElementById('modal-publish-offer').close()" class="text-slate-400 hover:text-slate-700">✕</button>
+    </div>
+    <p class="text-xs text-slate-500">
+      Protegido por filtro anti-abuso e enviado ao RabbitMQ para calcular desconto e avisar quem tem o item na lista.
+    </p>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div class="col-span-2">
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Produto *</label>
+        <input name="product_name" required placeholder="Ex.: Café Pilão Tradicional 500g"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Mercado *</label>
+        <input name="market_name" required placeholder="Ex.: Atacadão"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Preço (R$) *</label>
+        <input name="price" required placeholder="Ex.: 13,90"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Categoria</label>
+        <select name="category" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white">
+          {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Código de barras EAN (opcional)</label>
+        <input name="ean" placeholder="7896089011357"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Marca (opcional)</label>
+        <input name="brand" placeholder="Ex.: Pilão"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Cidade (opcional)</label>
+        <input name="city" placeholder="Ex.: São Paulo"
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <input type="hidden" name="latitude" id="pub-lat" value="{{ lat|default:'' }}">
+      <input type="hidden" name="longitude" id="pub-lng" value="{{ lng|default:'' }}">
+    </div>
+
+    <label class="flex items-center gap-2 text-xs text-slate-600 pt-1">
+      <input type="checkbox" name="only_group" value="1" class="rounded border-slate-300">
+      Compartilhar apenas com meu grupo ativo
+    </label>
+
+    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm shadow transition">
+      Publicar e notificar via RabbitMQ
+    </button>
+  </form>
+</dialog>
+
+<!-- Modal Escolher Lista -->
+<dialog id="modal-add-to-list" class="rounded-2xl p-0 w-full max-w-md shadow-2xl backdrop:bg-slate-900/60">
+  <form method="post" id="add-to-list-form" action="" class="p-6 space-y-4">
+    {% csrf_token %}
+    <div class="flex items-center justify-between">
+      <h3 class="text-base font-bold text-slate-900">Adicionar oferta em qual lista?</h3>
+      <button type="button" onclick="document.getElementById('modal-add-to-list').close()" class="text-slate-400 hover:text-slate-700">✕</button>
+    </div>
+    <div id="add-to-list-subtitle" class="text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg"></div>
+
+    {% if user_lists %}
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Escolher lista existente</label>
+        <select name="list_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white">
+          {% for sl in user_lists %}
+            <option value="{{ sl.id }}">{{ sl.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    <div>
+      <label class="block text-xs font-semibold text-slate-700 mb-1">Ou criar nova lista agora</label>
+      <input name="new_list_name" placeholder="Deixe vazio para usar a lista selecionada acima"
+             class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+    </div>
+
+    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm">
+      Adicionar item
+    </button>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function updateChipStyles(val) {
+    document.querySelectorAll('.radius-chip').forEach(btn => {
+      const active = btn.dataset.radius === val;
+      btn.className = 'radius-chip px-3 py-1 rounded-full text-xs font-semibold border transition ' + (
+        active
+          ? 'bg-emerald-600 text-white border-emerald-600'
+          : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-emerald-400'
+      );
+    });
+  }
+
+  function applyRadius(val) {
+    document.getElementById('radius-hidden').value = val;
+    document.getElementById('save-radius-value').value = val;
+    if (['5', '10', '30', '50', 'all'].includes(val)) {
+      document.getElementById('custom-radius-input').value = '';
+    }
+    updateChipStyles(val);
+    htmx.trigger('#community-filter-form', 'submit');
+  }
+
+  function applyCustomRadius() {
+    const raw = document.getElementById('custom-radius-input').value.trim();
+    const num = parseInt(raw, 10);
+    if (!num || num < 1 || num > 500) {
+      alert('Digite um raio válido entre 1 e 500 km.');
+      return;
+    }
+    applyRadius(String(num));
+  }
+
+  function detectLocation() {
+    if (!navigator.geolocation) {
+      alert('Seu navegador não suporta geolocalização.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        document.getElementById('geo-lat').value = lat;
+        document.getElementById('geo-lng').value = lng;
+        document.getElementById('pub-lat').value = lat;
+        document.getElementById('pub-lng').value = lng;
+        htmx.trigger('#community-filter-form', 'submit');
+      },
+      () => alert('Não foi possível obter sua localização. Verifique a permissão do navegador.')
+    );
+  }
+
+  function openAddToListModal(offerId, label) {
+    document.getElementById('add-to-list-form').action = '/comunidade/' + offerId + '/adicionar-lista/';
+    document.getElementById('add-to-list-subtitle').textContent = label;
+    document.getElementById('modal-add-to-list').showModal();
+  }
+</script>
+{% endblock %}

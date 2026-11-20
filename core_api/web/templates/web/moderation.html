@@ -1,0 +1,116 @@
+{% extends "web/base.html" %}
+{% block title %}Moderação — Market-Track Web{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-slate-900">Painel de Moderação</h1>
+  <p class="text-sm text-slate-500">Revise ofertas em quarentena (RabbitMQ) e aprove produtos validados para o Catálogo Global.</p>
+</div>
+
+<!-- Ofertas Denunciadas / Quarentena -->
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+  <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+    <h2 class="font-bold text-slate-900">🚩 Ofertas em Quarentena / Removidas ({{ flagged_offers|length }})</h2>
+  </div>
+  {% if flagged_offers %}
+  <table class="w-full text-left border-collapse text-sm">
+    <thead>
+      <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
+        <th class="py-3 px-4">Oferta</th>
+        <th class="py-3 px-4">Autor</th>
+        <th class="py-3 px-4">Status / Denúncias</th>
+        <th class="py-3 px-4 text-right">Decisão</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for off in flagged_offers %}
+      <tr>
+        <td class="py-3 px-4">
+          <div class="font-semibold text-slate-900">{{ off.product_name }} — R$ {{ off.price_brl }}</div>
+          <div class="text-xs text-slate-500">{{ off.market_name }}</div>
+        </td>
+        <td class="py-3 px-4 text-xs text-slate-600">
+          {% if off.reported_by %}{{ off.reported_by.username }} ({{ off.reported_by.email }}){% else %}-{% endif %}
+        </td>
+        <td class="py-3 px-4 text-xs">
+          <span class="px-2 py-0.5 rounded-full font-bold {% if off.moderation_status == 'flagged' %}bg-amber-100 text-amber-800{% else %}bg-rose-100 text-rose-800{% endif %}">
+            {{ off.moderation_status }}
+          </span>
+          <span class="ml-1 text-slate-500">({{ off.abuse_reports_count }} denúncias)</span>
+        </td>
+        <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+          <form method="post" action="{% url 'web:moderate_offer' off.id %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="approve">
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Restaurar</button>
+          </form>
+          <form method="post" action="{% url 'web:moderate_offer' off.id %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="remove">
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold">Remover</button>
+          </form>
+          <form method="post" action="{% url 'web:moderate_offer' off.id %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="ban_author">
+            <button type="submit" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold">Banir autor</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="p-8 text-center text-sm text-slate-400">Nenhuma oferta em quarentena no momento. Tudo limpo!</div>
+  {% endif %}
+</div>
+
+<!-- Promoção para Catálogo Global -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h2 class="font-bold text-slate-900">🌐 Promover Produto do Grupo ao Catálogo Global</h2>
+    </div>
+    {% if group_products %}
+      <div class="divide-y divide-slate-100">
+        {% for p in group_products %}
+        <div class="px-5 py-3 flex items-center justify-between gap-3 text-sm">
+          <div>
+            <div class="font-semibold text-slate-900">{{ p.name }}</div>
+            <div class="text-xs text-slate-500">{{ p.brand|default:"Sem marca" }} · EAN {{ p.barcode|default:"-" }}</div>
+          </div>
+          <form method="post" action="{% url 'web:promote_product' p.id %}">
+            {% csrf_token %}
+            <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+              Promover a Global
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="p-8 text-center text-sm text-slate-400">Nenhum produto privado pendente no grupo ativo.</div>
+    {% endif %}
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h2 class="font-bold text-slate-900">🚫 Contas Restritas na Comunidade ({{ banned_users|length }})</h2>
+    </div>
+    {% if banned_users %}
+      <div class="divide-y divide-slate-100 text-sm">
+        {% for u in banned_users %}
+        <div class="px-5 py-3 flex items-center justify-between">
+          <div>
+            <div class="font-semibold text-slate-900">{{ u.username }}</div>
+            <div class="text-xs text-slate-500">{{ u.email }}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">Restrito</span>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="p-8 text-center text-sm text-slate-400">Nenhuma conta restrita no momento.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,156 @@
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+  <!-- Esquerda: Lista estilo planilha -->
+  <div class="xl:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900">{{ selected_list.name }}</h2>
+        <div class="text-xs text-slate-500">
+          {{ items|length }} itens · Estimativa atual: <strong class="text-emerald-700">R$ {{ estimated_brl }}</strong>
+        </div>
+      </div>
+
+      <!-- Orçamento inline -->
+      <form hx-post="{% url 'web:update_list_budget' selected_list.id %}"
+            hx-target="#list-workspace"
+            hx-swap="innerHTML"
+            class="no-print flex items-center gap-2">
+        {% csrf_token %}
+        <span class="text-xs text-slate-500 font-medium">Teto R$:</span>
+        <input name="budget" value="{% if selected_list.budget_cents %}{{ budget_brl }}{% endif %}" placeholder="0,00"
+               class="w-24 rounded-lg border border-slate-300 px-2.5 py-1 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        <button type="submit" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold">
+          Salvar
+        </button>
+      </form>
+    </div>
+
+    {% if selected_list.budget_cents %}
+    <div class="px-5 py-2.5 bg-slate-50 border-b border-slate-200">
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-medium {% if over_budget %}text-rose-700{% else %}text-slate-600{% endif %}">
+          {% if over_budget %}Acima do orçamento!{% else %}Uso do orçamento{% endif %}
+        </span>
+        <span class="font-semibold text-slate-700">R$ {{ estimated_brl }} / R$ {{ budget_brl }} ({{ budget_pct }}%)</span>
+      </div>
+      <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+        <div class="h-full rounded-full {% if over_budget %}bg-rose-500{% else %}bg-emerald-500{% endif %}" style="width: {{ budget_pct }}%"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Barra rápida estilo planilha (Enter adiciona item via HTMX) -->
+    <form hx-post="{% url 'web:add_list_item' selected_list.id %}"
+          hx-target="#list-workspace"
+          hx-swap="innerHTML"
+          class="no-print p-4 bg-emerald-50/50 border-b border-slate-200 grid grid-cols-12 gap-2">
+      {% csrf_token %}
+      <input name="product_name" required placeholder="Adicionar item (ex.: Café Pilão 500g) e aperte Enter..."
+             class="col-span-6 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      <input name="quantity" value="1" placeholder="Qtd"
+             class="col-span-2 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-center focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      <input name="price" placeholder="R$ est."
+             class="col-span-2 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      <button type="submit" class="col-span-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition">
+        + Add
+      </button>
+    </form>
+
+    <!-- Itens -->
+    {% if items %}
+    <div class="divide-y divide-slate-100">
+      {% for item in items %}
+      <div class="px-5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition">
+        <div class="flex items-center gap-3 min-w-0">
+          <button hx-post="{% url 'web:toggle_list_item' item.id %}"
+                  hx-target="#list-workspace"
+                  hx-swap="innerHTML"
+                  class="no-print w-5 h-5 rounded-md border flex items-center justify-center text-xs transition {% if item.checked %}bg-emerald-600 border-emerald-600 text-white{% else %}border-slate-300 bg-white hover:border-emerald-500{% endif %}">
+            {% if item.checked %}✓{% endif %}
+          </button>
+          <div class="min-w-0">
+            <div class="text-sm font-medium {% if item.checked %}line-through text-slate-400{% else %}text-slate-900{% endif %} truncate">
+              {{ item.product_name }}
+            </div>
+            <div class="text-xs text-slate-500">
+              {{ item.quantity|floatformat:"-2" }} {{ item.unit }}
+              {% if item.selected_market %} · {{ item.selected_market }}{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
+          {% if item.price_brl %}
+            <span class="text-sm font-semibold text-emerald-700">R$ {{ item.price_brl }}</span>
+          {% else %}
+            <span class="text-xs text-slate-400">Sem preço</span>
+          {% endif %}
+          <button hx-post="{% url 'web:delete_list_item' item.id %}"
+                  hx-target="#list-workspace"
+                  hx-swap="innerHTML"
+                  title="Remover"
+                  class="no-print text-slate-400 hover:text-rose-600 text-xs px-2 py-1 rounded-md hover:bg-rose-50 transition">
+            ✕
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="p-8 text-center text-sm text-slate-400">
+        Lista vazia. Digite um produto acima e pressione <strong>Enter</strong> para começar.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Direita: Comparador Automático de Cesta -->
+  <div class="xl:col-span-5 space-y-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-900 mb-1 flex items-center gap-2">
+        <span>⚖️</span> Comparador Automático de Cesta
+      </h3>
+      <p class="text-xs text-slate-500 mb-4">
+        Cruza automaticamente seus itens com as ofertas ativas da Comunidade.
+      </p>
+
+      {% if comparison.markets %}
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5">
+            <div class="text-[11px] font-semibold uppercase text-emerald-700">Melhor Mercado Único</div>
+            <div class="text-sm font-bold text-slate-900 mt-1 truncate">{{ comparison.best_single.market_name }}</div>
+            <div class="text-lg font-extrabold text-emerald-700">R$ {{ comparison.best_single.total_brl }}</div>
+            <div class="text-[11px] text-slate-500">{{ comparison.best_single.matched }}/{{ comparison.items_count }} itens cotados</div>
+          </div>
+
+          <div class="rounded-xl bg-sky-50 border border-sky-200 p-3.5">
+            <div class="text-[11px] font-semibold uppercase text-sky-700">Dividindo Mercados</div>
+            <div class="text-sm font-bold text-slate-900 mt-1">Menor preço / item</div>
+            <div class="text-lg font-extrabold text-sky-700">R$ {{ comparison.split_total_brl }}</div>
+            <div class="text-[11px] text-slate-500">
+              {% if comparison.split_savings_cents > 0 %}
+                Economia extra: R$ {{ comparison.split_savings_brl }}
+              {% else %}
+                {{ comparison.split_matched }}/{{ comparison.items_count }} itens cotados
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2.5">
+          {% for m in comparison.markets %}
+          <div class="p-3 rounded-xl border border-slate-100 bg-slate-50/70 flex items-center justify-between">
+            <div>
+              <div class="font-semibold text-sm text-slate-800">{{ m.market_name }}</div>
+              <div class="text-xs text-slate-500">{{ m.matched }}/{{ comparison.items_count }} itens ({{ m.coverage }}% cobertura)</div>
+            </div>
+            <div class="font-bold text-slate-900 text-sm">R$ {{ m.total_brl }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="rounded-xl bg-slate-50 border border-dashed border-slate-200 p-5 text-center text-xs text-slate-500">
+          Adicione itens que tenham ofertas na Comunidade (ex.: <em>Café Pilão</em>, <em>Arroz Camil</em>, <em>Leite Piracanjuba</em>) para ver o comparativo automático entre mercados.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

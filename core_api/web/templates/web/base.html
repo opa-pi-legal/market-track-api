@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Market-Track Web{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      main { padding: 0 !important; margin: 0 !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <div class="min-h-screen flex">
+    <!-- Sidebar Desktop -->
+    <aside class="no-print w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800">
+      <div class="px-6 py-5 flex items-center gap-3 border-b border-slate-800">
+        <div class="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center font-bold text-slate-950 text-lg shadow">
+          M
+        </div>
+        <div>
+          <div class="font-bold tracking-tight text-white leading-tight">Market-Track</div>
+          <div class="text-xs text-emerald-400 font-medium">Central Web</div>
+        </div>
+      </div>
+
+      <!-- Seletor de Grupo -->
+      <div class="px-4 py-4 border-b border-slate-800">
+        <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+          Grupo ativo
+        </label>
+        {% if user_groups %}
+          <form method="post" action="/grupos/selecionar/{{ active_group.id }}/" id="group-switch-form">
+            {% csrf_token %}
+            <select
+              onchange="this.form.action='/grupos/selecionar/' + this.value + '/'; this.form.submit();"
+              class="w-full rounded-lg bg-slate-800 border border-slate-700 text-sm text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              {% for g in user_groups %}
+                <option value="{{ g.id }}" {% if active_group and g.id == active_group.id %}selected{% endif %}>
+                  {{ g.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </form>
+        {% else %}
+          <div class="text-xs text-amber-300 bg-amber-950/50 border border-amber-800/60 rounded-lg p-2.5">
+            Você ainda não participa de nenhum grupo.
+          </div>
+        {% endif %}
+        <div class="mt-2 flex gap-2">
+          <button type="button" onclick="document.getElementById('modal-group').showModal()"
+                  class="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 px-2 rounded-md border border-slate-700 transition">
+            + Novo / Entrar
+          </button>
+        </div>
+      </div>
+
+      <!-- Navegação -->
+      <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
+        <a href="{% url 'web:dashboard' %}"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'dashboard' %}bg-emerald-500/15 text-emerald-300 border border-emerald-500/30{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+          <span>📊</span>
+          <span>Dashboard</span>
+        </a>
+
+        <a href="{% url 'web:lists' %}"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'lists' %}bg-emerald-500/15 text-emerald-300 border border-emerald-500/30{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+          <span>📝</span>
+          <span>Planejador de Listas</span>
+        </a>
+
+        <a href="{% url 'web:community' %}"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'community' %}bg-emerald-500/15 text-emerald-300 border border-emerald-500/30{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+          <span>📡</span>
+          <span>Radar Comunidade</span>
+          <span hx-get="{% url 'web:alerts_badge' %}" hx-trigger="every 120s" hx-swap="innerHTML" class="ml-auto">
+            {% if unread_alerts_count %}
+              <span class="inline-flex items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">{{ unread_alerts_count }}</span>
+            {% endif %}
+          </span>
+        </a>
+
+        <a href="{% url 'web:catalog' %}"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'catalog' %}bg-emerald-500/15 text-emerald-300 border border-emerald-500/30{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+          <span>🏪</span>
+          <span>Mercados &amp; Produtos</span>
+        </a>
+
+        {% if request.user.is_staff %}
+        <a href="{% url 'web:moderation' %}"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'moderation' %}bg-amber-500/15 text-amber-300 border border-amber-500/30{% else %}text-amber-200/80 hover:bg-slate-800 hover:text-amber-200{% endif %}">
+          <span>🛡️</span>
+          <span>Moderação</span>
+        </a>
+        {% endif %}
+      </nav>
+
+      <!-- Rodapé Usuário -->
+      <div class="p-4 border-t border-slate-800 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-white truncate">{{ request.user.username }}</div>
+          <div class="text-xs text-slate-400 truncate">{{ request.user.email }}</div>
+        </div>
+        <form method="post" action="{% url 'web:logout' %}">
+          {% csrf_token %}
+          <button type="submit" title="Sair"
+                  class="text-xs px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white transition">
+            Sair
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- Conteúdo Principal -->
+    <main class="flex-1 min-w-0 p-6 lg:p-8 overflow-y-auto">
+      {% if messages %}
+        <div class="no-print mb-5 space-y-2">
+          {% for message in messages %}
+            <div class="px-4 py-3 rounded-xl text-sm font-medium border flex items-center justify-between
+              {% if message.tags == 'error' %}bg-rose-50 text-rose-800 border-rose-200
+              {% elif message.tags == 'warning' %}bg-amber-50 text-amber-800 border-amber-200
+              {% elif message.tags == 'success' %}bg-emerald-50 text-emerald-800 border-emerald-200
+              {% else %}bg-sky-50 text-sky-800 border-sky-200{% endif %}">
+              <span>{{ message }}</span>
+              <button type="button" onclick="this.parentElement.remove()" class="text-xs opacity-60 hover:opacity-100 ml-4">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- Modal Criar / Entrar em Grupo -->
+  <dialog id="modal-group" class="rounded-2xl p-0 w-full max-w-md shadow-2xl backdrop:bg-slate-900/60">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900">Criar ou entrar em um grupo</h3>
+        <button type="button" onclick="document.getElementById('modal-group').close()" class="text-slate-400 hover:text-slate-700">✕</button>
+      </div>
+
+      <form method="post" action="{% url 'web:create_group' %}" class="space-y-3 pb-5 border-b border-slate-200">
+        {% csrf_token %}
+        <div class="text-xs font-semibold uppercase tracking-wider text-emerald-700">Criar novo grupo</div>
+        <input name="name" required placeholder="Ex.: Casa da Família"
+               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        <input name="description" placeholder="Descrição opcional"
+               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-sm transition">
+          Criar grupo
+        </button>
+      </form>
+
+      <form method="post" action="{% url 'web:join_group' %}" class="space-y-3 pt-5">
+        {% csrf_token %}
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-600">Entrar com código de convite</div>
+        <input name="code" required placeholder="Ex.: A1B2C3D4"
+               class="w-full uppercase rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-lg text-sm transition">
+          Entrar no grupo
+        </button>
+      </form>
+    </div>
+  </dialog>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

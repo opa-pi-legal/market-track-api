@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar — Market-Track Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+  <div class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden grid md:grid-cols-2">
+    <!-- Painel Marca -->
+    <div class="bg-gradient-to-br from-emerald-600 to-teal-800 p-10 text-white flex flex-col justify-between">
+      <div>
+        <div class="inline-flex items-center gap-2.5 bg-white/15 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide mb-8">
+          <span>📡</span> Sincronizado com o App &amp; RabbitMQ
+        </div>
+        <h1 class="text-3xl font-bold leading-tight mb-4">Market-Track Web</h1>
+        <p class="text-emerald-100 text-sm leading-relaxed">
+          Sua central de planejamento no computador: monte listas com comparador automático de mercados,
+          acompanhe ofertas da comunidade por raio configurável e receba alertas de preço em tempo real.
+        </p>
+      </div>
+      <div class="mt-8 space-y-2 text-xs text-emerald-100/90">
+        <div>✓ Planejador em tela dividida com comparador de cesta</div>
+        <div>✓ Radar da comunidade com raio configurável em km</div>
+        <div>✓ Alertas assíncronos via mensageria RabbitMQ</div>
+      </div>
+    </div>
+
+    <!-- Formulário -->
+    <div class="p-10 flex flex-col justify-center">
+      <div class="flex gap-4 mb-6 border-b border-slate-200 pb-3 text-sm font-semibold">
+        <a href="{% url 'web:login' %}" class="{% if mode == 'login' %}text-emerald-600 border-b-2 border-emerald-600 pb-3 -mb-3.5{% else %}text-slate-400 hover:text-slate-700{% endif %}">
+          Entrar
+        </a>
+        <a href="{% url 'web:register' %}" class="{% if mode == 'register' %}text-emerald-600 border-b-2 border-emerald-600 pb-3 -mb-3.5{% else %}text-slate-400 hover:text-slate-700{% endif %}">
+          Criar conta
+        </a>
+      </div>
+
+      {% if messages %}
+        <div class="mb-4 space-y-2">
+          {% for message in messages %}
+            <div class="text-xs px-3 py-2.5 rounded-lg border {% if message.tags == 'error' %}bg-rose-50 text-rose-700 border-rose-200{% else %}bg-emerald-50 text-emerald-700 border-emerald-200{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if mode == 'register' %}
+        <form method="post" action="{% url 'web:register' %}" class="space-y-4">
+          {% csrf_token %}
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nome de usuário</label>
+            <input name="username" required placeholder="ex.: casemiro"
+                   class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">E-mail</label>
+            <input type="email" name="email" required placeholder="voce@email.com"
+                   class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Senha (mín. 6 caracteres)</label>
+            <input type="password" name="password" required minlength="6"
+                   class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm shadow transition">
+            Criar conta e entrar
+          </button>
+        </form>
+      {% else %}
+        <form method="post" action="{% url 'web:login' %}" class="space-y-4">
+          {% csrf_token %}
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">E-mail ou usuário</label>
+            <input name="identifier" required placeholder="voce@email.com"
+                   class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Senha</label>
+            <input type="password" name="password" required
+                   class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm shadow transition">
+            Entrar na Central Web
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

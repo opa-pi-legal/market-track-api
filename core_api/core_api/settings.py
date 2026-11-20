@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'api',
+    'web',
 ]
 
 AUTH_USER_MODEL = 'api.User'
@@ -88,6 +89,13 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:90',
+    'http://localhost:8090',
+    'http://127.0.0.1:8000',
+    'http://18.220.240.211:90',
+    'http://18.220.240.211:8090',
+]
 
 ROOT_URLCONF = 'core_api.urls'
 
