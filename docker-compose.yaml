@@ -61,7 +61,7 @@ services:
   core-api:
     build:
       context: .
-      dockerfile: core_api/Dockerfile
+      dockerfile: core_api/dockerfile
     container_name: core_api_service
     restart: always
     command: sh -c "python manage.py migrate --noinput && (python manage.py consume_events &) && gunicorn -c /app/gunicorn.conf.py core_api.wsgi:application --bind 0.0.0.0:8000"
@@ -90,7 +90,7 @@ services:
   market-api:
     build:
       context: .
-      dockerfile: market_api/Dockerfile
+      dockerfile: market_api/dockerfile
     container_name: market_api_service
     restart: always
     command: sh -c "python manage.py migrate --noinput && (python manage.py consume_events &) && gunicorn -c /app/gunicorn.conf.py market_api.wsgi:application --bind 0.0.0.0:8002"
@@ -148,7 +148,7 @@ services:
   migrate-core:
     build:
       context: .
-      dockerfile: core_api/Dockerfile
+      dockerfile: core_api/dockerfile
     container_name: core_migrate
     command: sh -c "python manage.py migrate --noinput"
     volumes:
@@ -163,7 +163,7 @@ services:
   migrate-market:
     build:
       context: .
-      dockerfile: market_api/Dockerfile
+      dockerfile: market_api/dockerfile
     container_name: market_migrate
     command: sh -c "python manage.py migrate --noinput"
     volumes:

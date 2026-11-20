@@ -20,7 +20,7 @@ def fetch_markets(user, group_id) -> list[dict]:
         return []
     try:
         resp = requests.get(
-            f'{MARKET_API_URL}/markets/',
+            f'{MARKET_API_URL}/market/',
             params={'group_id': str(group_id)},
             headers=_auth_headers(user),
             timeout=3,
@@ -36,7 +36,7 @@ def fetch_markets(user, group_id) -> list[dict]:
 def create_market(user, payload: dict) -> tuple[bool, str | None]:
     try:
         resp = requests.post(
-            f'{MARKET_API_URL}/markets/',
+            f'{MARKET_API_URL}/market/',
             json=payload,
             headers=_auth_headers(user),
             timeout=4,

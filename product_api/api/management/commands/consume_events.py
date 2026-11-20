@@ -8,7 +8,7 @@ def handle_event(routing_key: str, payload: dict) -> None:
     if routing_key == 'group.deleted':
         group_id = payload.get('group_id')
         if group_id is not None:
-            Product.objects.filter(group_id=str(group_id)).delete()
+            Product.objects.filter(group_id=str(group_id), is_global=False).delete()
 
 
 class Command(BaseCommand):
