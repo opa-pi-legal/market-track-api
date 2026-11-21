@@ -9,6 +9,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
 
     path('', views.dashboard_view, name='dashboard'),
+    path('relatorios/csv/', views.export_csv_report_view, name='export_csv'),
     path('alertas/badge/', views.alerts_badge_partial, name='alerts_badge'),
     path('alertas/<int:alert_id>/lido/', views.mark_alert_read_view, name='mark_alert_read'),
 
@@ -34,7 +35,14 @@ urlpatterns = [
     path('catalogo/mercado/criar/', views.create_market_view, name='create_market'),
     path('catalogo/produto/criar/', views.create_product_view, name='create_product'),
 
+    path('curadoria/', views.moderation_view, name='curadoria'),
     path('moderacao/', views.moderation_view, name='moderation'),
     path('moderacao/oferta/<int:offer_id>/', views.moderate_offer_view, name='moderate_offer'),
     path('moderacao/produto/<int:product_id>/promover/', views.promote_product_view, name='promote_product'),
+    path('moderacao/usuario/<int:user_id>/desbanir/', views.unban_user_view, name='unban_user'),
+    path('moderacao/mercado/<int:market_id>/geo/', views.update_market_geo_view, name='update_market_geo'),
+
+    path('manutencao/', views.maintenance_view, name='maintenance'),
+    path('manutencao/limpar-expiradas/', views.cleanup_expired_offers_view, name='cleanup_expired_offers'),
+    path('manutencao/simular-alerta/', views.simulate_alert_view, name='simulate_alert'),
 ]

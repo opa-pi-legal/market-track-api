@@ -96,3 +96,12 @@ class ProductApiTests(TestCase):
         self.assertFalse(Product.objects.filter(id=temp.id).exists())
         self.assertTrue(Product.objects.filter(id=self.p1.id).exists())
         self.assertTrue(Product.objects.filter(id=self.p2.id).exists())
+
+    def test_all_groups_requires_staff_permission(self):
+        res_user = self.user_client.get('/product-api/api/products/?all_groups=true')
+        self.assertEqual(res_user.status_code, 200)
+        self.assertEqual(len(res_user.data), 0)
+
+        res_staff = self.staff_client.get('/product-api/api/products/?all_groups=true')
+        self.assertEqual(res_staff.status_code, 200)
+        self.assertEqual(len(res_staff.data), 2)

@@ -12,14 +12,23 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
+    def _is_staff_request(self) -> bool:
+        return bool(
+            getattr(self.request.user, 'is_staff', False)
+            or (self.request.auth and self.request.auth.get('is_staff'))
+        )
+
     def get_queryset(self):
         queryset = Product.objects.all()
         group_id = self.request.query_params.get('group_id') or self.request.query_params.get('group')
         include_global = self.request.query_params.get('include_global', 'false').lower() in ('true', '1', 'yes')
         global_only = self.request.query_params.get('global_only', 'false').lower() in ('true', '1', 'yes')
+        all_groups = self.request.query_params.get('all_groups', 'false').lower() in ('true', '1', 'yes')
 
         if self.action == 'list':
-            if global_only:
+            if all_groups and self._is_staff_request():
+                pass
+            elif global_only:
                 queryset = queryset.filter(is_global=True)
             elif group_id and include_global:
                 queryset = queryset.filter(Q(group_id=str(group_id)) | Q(is_global=True))

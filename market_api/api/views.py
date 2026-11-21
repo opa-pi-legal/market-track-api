@@ -9,17 +9,24 @@ class MarketViewSet(viewsets.ModelViewSet):
     queryset = Market.objects.all()
     serializer_class = MarketSerializer
 
+    def _is_staff_request(self) -> bool:
+        return bool(
+            getattr(self.request.user, 'is_staff', False)
+            or (self.request.auth and self.request.auth.get('is_staff'))
+        )
+
     def get_queryset(self):
         queryset = Market.objects.all()
         group_id = self.request.query_params.get('group_id') or self.request.query_params.get('group')
-        if self.action == 'list' and not group_id:
+        all_groups = self.request.query_params.get('all_groups', 'false').lower() in ('true', '1', 'yes')
+        if self.action == 'list' and not group_id and not (all_groups and self._is_staff_request()):
             return queryset.none()
         status_param = self.request.query_params.get('status')
         if group_id:
             queryset = queryset.filter(group_id=str(group_id))
         if status_param:
             queryset = queryset.filter(status=status_param)
-        return queryset
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         added_by = serializer.validated_data.get('added_by')

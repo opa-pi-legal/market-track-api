@@ -99,12 +99,17 @@
     {% if banned_users %}
       <div class="divide-y divide-slate-100 text-sm">
         {% for u in banned_users %}
-        <div class="px-5 py-3 flex items-center justify-between">
+        <div class="px-5 py-3 flex items-center justify-between gap-3">
           <div>
             <div class="font-semibold text-slate-900">{{ u.username }}</div>
             <div class="text-xs text-slate-500">{{ u.email }}</div>
           </div>
-          <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">Restrito</span>
+          <form method="post" action="{% url 'web:unban_user' u.id %}">
+            {% csrf_token %}
+            <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-emerald-700 text-white text-xs font-semibold transition">
+              Desbanir
+            </button>
+          </form>
         </div>
         {% endfor %}
       </div>
@@ -112,5 +117,37 @@
       <div class="p-8 text-center text-sm text-slate-400">Nenhuma conta restrita no momento.</div>
     {% endif %}
   </div>
+</div>
+
+<!-- Saneamento de Mercados sem Coordenadas -->
+<div class="mt-6 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+  <div class="px-5 py-4 border-b border-slate-200">
+    <h2 class="font-bold text-slate-900">📍 Saneamento de Mercados sem Coordenadas ({{ markets_without_geo|length }})</h2>
+    <p class="text-xs text-slate-500">Preencha cidade e latitude/longitude para que os mercados entrem no filtro de raio configurável.</p>
+  </div>
+  {% if markets_without_geo %}
+    <div class="divide-y divide-slate-100">
+      {% for m in markets_without_geo %}
+      <form method="post" action="{% url 'web:update_market_geo' m.id %}" class="px-5 py-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-sm">
+        {% csrf_token %}
+        <div class="md:col-span-4">
+          <div class="font-semibold text-slate-900">{{ m.name }}</div>
+          <div class="text-xs text-slate-500">Grupo #{{ m.group_id }} · {{ m.address|default:"Sem endereço" }}</div>
+        </div>
+        <input name="city" value="{{ m.city|default:'' }}" placeholder="Cidade"
+               class="md:col-span-3 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs">
+        <input name="latitude" placeholder="Latitude (ex: -23.5505)"
+               class="md:col-span-2 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs">
+        <input name="longitude" placeholder="Longitude (ex: -46.6333)"
+               class="md:col-span-2 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs">
+        <button type="submit" class="md:col-span-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+          Salvar
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="p-8 text-center text-sm text-slate-400">Todos os mercados cadastrados já possuem coordenadas (ou nenhum mercado pendente).</div>
+  {% endif %}
 </div>
 {% endblock %}

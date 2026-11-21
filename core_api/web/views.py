@@ -1,3 +1,4 @@
+import csv
 import json
 import uuid
 from collections import defaultdict
@@ -375,6 +376,21 @@ def dashboard_view(request):
     for off in top_offers:
         off.price_brl = f'{off.price_cents / 100:.2f}'.replace('.', ',')
 
+    staff_kpis = None
+    if request.user.is_staff:
+        total_alerts = PriceAlert.objects.count()
+        read_alerts = PriceAlert.objects.filter(is_read=True).count()
+        read_pct = int(round((read_alerts / total_alerts) * 100)) if total_alerts else 0
+        staff_kpis = {
+            'total_users': User.objects.count(),
+            'total_groups': Groups.objects.count(),
+            'total_lists': ShoppingList.objects.filter(status='active').count(),
+            'flagged_offers': CommunityOffer.objects.filter(moderation_status='flagged').count(),
+            'total_alerts': total_alerts,
+            'read_alerts': read_alerts,
+            'alerts_read_pct': read_pct,
+        }
+
     ctx.update({
         'active_lists_count': lists_qs.filter(status='active').count(),
         'pending_items_count': items_qs.filter(checked=False).count(),
@@ -386,10 +402,59 @@ def dashboard_view(request):
         'user_level': level,
         'offers_shared': offers_shared,
         'confirmations_given': confirmations,
+        'staff_kpis': staff_kpis,
         'chart_markets_json': json.dumps(chart_markets),
         'chart_categories_json': json.dumps(chart_categories),
     })
     return render(request, 'web/dashboard.html', ctx)
+
+
+@login_required(login_url='/login/')
+def export_csv_report_view(request):
+    if not request.user.is_staff:
+        return HttpResponseForbidden('Acesso restrito à staff.')
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="market_track_relatorio_ofertas.csv"'
+    response.write('\ufeff')  # BOM UTF-8 para abrir acentos corretamente no Excel
+
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow([
+        'ID',
+        'Produto',
+        'Marca',
+        'Categoria',
+        'EAN',
+        'Mercado',
+        'Cidade',
+        'Preco_BRL',
+        'Desconto_Pct',
+        'Confirmacoes',
+        'Denuncias_Abuso',
+        'Status_Moderacao',
+        'Ativa',
+        'Criado_Em',
+    ])
+
+    offers = CommunityOffer.objects.all().order_by('-created_at')[:1000]
+    for off in offers:
+        writer.writerow([
+            off.id,
+            off.product_name,
+            off.brand,
+            off.category,
+            off.ean,
+            off.market_name,
+            off.city,
+            f'{off.price_cents / 100:.2f}'.replace('.', ','),
+            off.discount_percent,
+            off.confirmations_count,
+            off.abuse_reports_count,
+            off.moderation_status,
+            'Sim' if off.is_active else 'Nao',
+            off.created_at.strftime('%Y-%m-%d %H:%M'),
+        ])
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -956,7 +1021,6 @@ def moderation_view(request):
         return HttpResponseForbidden('Acesso restrito a moderadores.')
 
     ctx = _base_context(request, 'moderation')
-    group = ctx['active_group']
     flagged_offers = list(
         CommunityOffer.objects.select_related('reported_by')
         .filter(moderation_status__in=('flagged', 'removed'))
@@ -965,15 +1029,21 @@ def moderation_view(request):
     for off in flagged_offers:
         off.price_brl = f'{off.price_cents / 100:.2f}'.replace('.', ',')
 
-    group_products = [
-        p for p in (services.fetch_products(request.user, group.id, include_global=False) if group else [])
-        if not p.get('is_global')
-    ]
-    banned_users = list(User.objects.filter(community_banned=True).order_by('-updated_at')[:20])
+    all_products = services.fetch_all_products(request.user)
+    group_products = [p for p in all_products if not p.get('is_global')][:40]
+
+    all_markets = services.fetch_all_markets(request.user)
+    markets_without_geo = [
+        m for m in all_markets
+        if m.get('latitude') is None or m.get('longitude') is None
+    ][:30]
+
+    banned_users = list(User.objects.filter(community_banned=True).order_by('-updated_at')[:30])
 
     ctx.update({
         'flagged_offers': flagged_offers,
         'group_products': group_products,
+        'markets_without_geo': markets_without_geo,
         'banned_users': banned_users,
     })
     return render(request, 'web/moderation.html', ctx)
@@ -1005,7 +1075,7 @@ def moderate_offer_view(request, offer_id: int):
             offer.reported_by.community_banned = True
             offer.reported_by.save(update_fields=['community_banned', 'updated_at'])
         messages.warning(request, 'Oferta removida e autor bloqueado de publicações globais.')
-    return redirect('web:moderation')
+    return redirect('web:curadoria')
 
 
 @login_required(login_url='/login/')
@@ -1019,4 +1089,149 @@ def promote_product_view(request, product_id: int):
         messages.success(request, f'Produto #{product_id} promovido para o Catálogo Global!')
     else:
         messages.error(request, f'Não foi possível promover o produto: {err}')
-    return redirect('web:moderation')
+    return redirect('web:curadoria')
+
+
+@login_required(login_url='/login/')
+@require_POST
+def unban_user_view(request, user_id: int):
+    if not request.user.is_staff:
+        return HttpResponseForbidden('Acesso restrito a moderadores.')
+
+    target = get_object_or_404(User, id=user_id)
+    target.community_banned = False
+    target.save(update_fields=['community_banned', 'updated_at'])
+    messages.success(request, f'Usuário "{target.username}" desbloqueado para a comunidade global.')
+    return redirect('web:curadoria')
+
+
+@login_required(login_url='/login/')
+@require_POST
+def update_market_geo_view(request, market_id: int):
+    if not request.user.is_staff:
+        return HttpResponseForbidden('Acesso restrito a moderadores.')
+
+    city = (request.POST.get('city') or '').strip()
+    lat_raw = (request.POST.get('latitude') or '').strip().replace(',', '.')
+    lng_raw = (request.POST.get('longitude') or '').strip().replace(',', '.')
+
+    payload = {}
+    if city:
+        payload['city'] = city
+    try:
+        if lat_raw and lng_raw:
+            payload['latitude'] = float(lat_raw)
+            payload['longitude'] = float(lng_raw)
+    except ValueError:
+        messages.error(request, 'Coordenadas inválidas. Use números decimais (ex.: -23.5505).')
+        return redirect('web:curadoria')
+
+    if not payload:
+        messages.warning(request, 'Informe cidade ou latitude/longitude para atualizar.')
+        return redirect('web:curadoria')
+
+    ok, err = services.update_market(request.user, market_id, payload)
+    if ok:
+        messages.success(request, f'Localização do mercado #{market_id} atualizada!')
+    else:
+        messages.error(request, f'Erro ao atualizar mercado #{market_id}: {err}')
+    return redirect('web:curadoria')
+
+
+# ---------------------------------------------------------------------------
+# Staff Maintenance & Observability
+# ---------------------------------------------------------------------------
+
+@login_required(login_url='/login/')
+def maintenance_view(request):
+    if not request.user.is_staff:
+        return HttpResponseForbidden('Acesso restrito à staff.')
+
+    ctx = _base_context(request, 'maintenance')
+    health_checks = services.check_services_health()
+    rabbit_queues, rabbit_ok = services.fetch_rabbitmq_queues()
+    cutoff = timezone.now() - timedelta(days=7)
+    old_offers_count = CommunityOffer.objects.filter(is_active=True, created_at__lt=cutoff).count()
+    recent_logs = list(ActivityLog.objects.select_related('group').order_by('-created_at')[:25])
+    all_users = list(User.objects.order_by('id')[:50])
+
+    ctx.update({
+        'health_checks': health_checks,
+        'rabbit_queues': rabbit_queues,
+        'rabbit_ok': rabbit_ok,
+        'old_offers_count': old_offers_count,
+        'recent_logs': recent_logs,
+        'all_users': all_users,
+    })
+    return render(request, 'web/maintenance.html', ctx)
+
+
+@login_required(login_url='/login/')
+@require_POST
+def cleanup_expired_offers_view(request):
+    if not request.user.is_staff:
+        return HttpResponseForbidden('Acesso restrito à staff.')
+
+    try:
+        days = int(request.POST.get('days') or 7)
+        days = max(1, min(365, days))
+    except ValueError:
+        days = 7
+
+    cutoff = timezone.now() - timedelta(days=days)
+    archived = CommunityOffer.objects.filter(is_active=True, created_at__lt=cutoff).update(is_active=False)
+    messages.success(request, f'Limpeza concluída: {archived} oferta(s) com mais de {days} dia(s) arquivada(s).')
+    return redirect('web:maintenance')
+
+
+@login_required(login_url='/login/')
+@require_POST
+def simulate_alert_view(request):
+    if not request.user.is_staff:
+        return HttpResponseForbidden('Acesso restrito à staff.')
+
+    product_name = (request.POST.get('product_name') or 'Café Pilão Tradicional 500g').strip()
+    market_name = (request.POST.get('market_name') or 'Atacadão').strip()
+    price_cents = _parse_money_to_cents(request.POST.get('price') or '12,90') or 1290
+    target_uid = request.POST.get('target_user_id')
+
+    target_user = User.objects.filter(id=target_uid).first() if target_uid else request.user
+    reporter = User.objects.exclude(id=target_user.id).order_by('id').first() if target_user else request.user
+
+    offer = CommunityOffer.objects.create(
+        reported_by=reporter or request.user,
+        ean='7896089011357' if 'caf' in product_name.lower() else '',
+        product_name=product_name,
+        market_name=market_name,
+        price_cents=price_cents,
+        is_promotion=True,
+        is_active=True,
+    )
+    publish_event(
+        'offer.published',
+        {
+            'offer_id': offer.id,
+            'ean': offer.ean,
+            'product_name': offer.product_name,
+            'market_name': offer.market_name,
+            'price_cents': offer.price_cents,
+            'reported_by_id': offer.reported_by_id,
+        },
+    )
+
+    valor = f'{price_cents / 100:.2f}'.replace('.', ',')
+    alert = PriceAlert.objects.create(
+        user=target_user,
+        group=None,
+        offer=offer,
+        ean=offer.ean,
+        product_name=offer.product_name,
+        market_name=offer.market_name,
+        new_price_cents=price_cents,
+        message=f'Oferta da comunidade: {product_name} por R$ {valor} no {market_name}!',
+    )
+    messages.success(
+        request,
+        f'Alerta #{alert.id} disparado via RabbitMQ para "{target_user.username if target_user else "usuário"}"!',
+    )
+    return redirect('web:maintenance')

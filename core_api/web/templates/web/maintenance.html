@@ -1,0 +1,145 @@
+{% extends "web/base.html" %}
+{% block title %}Manutenção — Market-Track Staff{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Manutenção &amp; Observabilidade</h1>
+    <p class="text-sm text-slate-500">Saúde dos microserviços, monitoramento das filas RabbitMQ e ferramentas operacionais da staff.</p>
+  </div>
+  <a href="{% url 'web:maintenance' %}" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition">
+    ↻ Atualizar Status
+  </a>
+</div>
+
+<!-- Saúde dos Microserviços & Infra -->
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-6">
+  <h2 class="font-bold text-slate-900 mb-3">🩺 Saúde dos Microserviços &amp; Infraestrutura</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+    {% for svc in health_checks %}
+    <div class="rounded-xl p-3.5 border {% if svc.ok %}bg-emerald-50/50 border-emerald-200{% else %}bg-rose-50/60 border-rose-200{% endif %}">
+      <div class="flex items-center justify-between font-bold text-sm text-slate-900">
+        <span>{{ svc.name }}</span>
+        <span class="text-xs {% if svc.ok %}text-emerald-700{% else %}text-rose-700{% endif %}">
+          {% if svc.ok %}● UP{% else %}● DOWN{% endif %}
+        </span>
+      </div>
+      <div class="text-xs text-slate-600 mt-1">{{ svc.detail }} · {{ svc.latency_ms }} ms</div>
+      <div class="text-[10px] font-mono text-slate-400 truncate mt-1" title="{{ svc.endpoint }}">{{ svc.endpoint }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Monitor RabbitMQ + Ações Operacionais -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+  <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+      <h2 class="font-bold text-slate-900">🐇 Monitor de Filas RabbitMQ</h2>
+      <span class="text-xs font-semibold px-2.5 py-1 rounded-full {% if rabbit_ok %}bg-emerald-100 text-emerald-800{% else %}bg-amber-100 text-amber-800{% endif %}">
+        {% if rabbit_ok %}Conectado{% else %}API Management indisponível{% endif %}
+      </span>
+    </div>
+    {% if rabbit_queues %}
+    <table class="w-full text-left border-collapse text-sm">
+      <thead>
+        <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
+          <th class="py-3 px-4">Fila</th>
+          <th class="py-3 px-4">Consumers</th>
+          <th class="py-3 px-4">Pendentes</th>
+          <th class="py-3 px-4">Estado</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 font-mono text-xs">
+        {% for q in rabbit_queues %}
+        <tr>
+          <td class="py-3 px-4 font-semibold text-slate-900">{{ q.name }}</td>
+          <td class="py-3 px-4">{{ q.consumers }}</td>
+          <td class="py-3 px-4">{{ q.messages_ready }}</td>
+          <td class="py-3 px-4 font-sans">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold {% if q.state == 'running' %}bg-emerald-100 text-emerald-800{% else %}bg-slate-100 text-slate-600{% endif %}">
+              {{ q.state }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="p-8 text-center text-sm text-slate-400">
+        Nenhuma fila retornada pela API de gestão do RabbitMQ (em ambiente Docker/AWS as 3 filas aparecem automaticamente).
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="lg:col-span-5 space-y-4">
+    <!-- Limpeza de Ofertas Antigas -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-900 text-sm mb-1">🧹 Limpeza de Ofertas Expiradas</h3>
+      <p class="text-xs text-slate-500 mb-3">
+        Atualmente há <strong>{{ old_offers_count }}</strong> oferta(s) ativa(s) com mais de 7 dias.
+      </p>
+      <form method="post" action="{% url 'web:cleanup_expired_offers' %}" class="flex gap-2">
+        {% csrf_token %}
+        <input name="days" type="number" min="1" max="365" value="7"
+               class="w-20 rounded-xl border border-slate-300 px-3 py-2 text-xs text-center">
+        <button type="submit" class="flex-1 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition">
+          Arquivar ofertas antigas (dias)
+        </button>
+      </form>
+    </div>
+
+    <!-- Simulador de Notificação RabbitMQ -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <h3 class="font-bold text-slate-900 text-sm mb-1">🔔 Simular Notificação RabbitMQ</h3>
+      <p class="text-xs text-slate-500 mb-3">
+        Publica uma oferta real na fila <code class="font-mono">offer.published</code> e gera um alerta no celular do usuário escolhido.
+      </p>
+      <form method="post" action="{% url 'web:simulate_alert' %}" class="space-y-2.5">
+        {% csrf_token %}
+        <input name="product_name" value="Café Pilão Tradicional 500g" required
+               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <input name="market_name" value="Atacadão" required
+                 class="rounded-xl border border-slate-300 px-3 py-2 text-xs">
+          <input name="price" value="12,90" required
+                 class="rounded-xl border border-slate-300 px-3 py-2 text-xs">
+        </div>
+        <select name="target_user_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs bg-white">
+          {% for u in all_users %}
+            <option value="{{ u.id }}" {% if u.id == request.user.id %}selected{% endif %}>
+              #{{ u.id }} — {{ u.username }} ({{ u.email }})
+            </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition">
+          Disparar Alerta via RabbitMQ
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Auditoria Global (ActivityLog) -->
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+  <div class="px-5 py-4 border-b border-slate-200">
+    <h2 class="font-bold text-slate-900">📜 Log Global de Auditoria &amp; Eventos (RabbitMQ)</h2>
+  </div>
+  {% if recent_logs %}
+    <div class="divide-y divide-slate-100 text-xs">
+      {% for log in recent_logs %}
+      <div class="px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="font-mono font-semibold text-emerald-700">{{ log.action }}</span>
+          <span class="text-slate-700 ml-2">{{ log.description|default:log.entity_type }}</span>
+          <span class="text-slate-400 ml-2">(Grupo: {{ log.group.name }})</span>
+        </div>
+        <span class="text-slate-400">{{ log.created_at|date:"d/m/Y H:i" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="p-8 text-center text-sm text-slate-400">Nenhum evento registrado ainda.</div>
+  {% endif %}
+</div>
+{% endblock %}

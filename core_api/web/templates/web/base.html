@@ -91,10 +91,18 @@
         </a>
 
         {% if request.user.is_staff %}
-        <a href="{% url 'web:moderation' %}"
+        <div class="pt-3 mt-3 border-t border-slate-800 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          Backoffice Staff
+        </div>
+        <a href="{% url 'web:curadoria' %}"
            class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'moderation' %}bg-amber-500/15 text-amber-300 border border-amber-500/30{% else %}text-amber-200/80 hover:bg-slate-800 hover:text-amber-200{% endif %}">
           <span>🛡️</span>
-          <span>Moderação</span>
+          <span>Curadoria</span>
+        </a>
+        <a href="{% url 'web:maintenance' %}"
+           class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition {% if active_nav == 'maintenance' %}bg-sky-500/15 text-sky-300 border border-sky-500/30{% else %}text-sky-200/80 hover:bg-slate-800 hover:text-sky-200{% endif %}">
+          <span>⚙️</span>
+          <span>Manutenção</span>
         </a>
         {% endif %}
       </nav>

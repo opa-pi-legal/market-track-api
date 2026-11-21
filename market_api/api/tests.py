@@ -63,3 +63,17 @@ class MarketApiTests(TestCase):
         handle_event('group.deleted', {'group_id': 1})
         self.assertFalse(Market.objects.filter(group_id='1').exists())
         self.assertTrue(Market.objects.filter(group_id='2').exists())
+
+    def test_all_groups_requires_staff_permission(self):
+        res_user = self.client.get('/market-api/api/market/?all_groups=true')
+        self.assertEqual(res_user.status_code, 200)
+        self.assertEqual(len(res_user.data), 0)
+
+        staff_client = APIClient()
+        staff_client.force_authenticate(
+            user=SimpleNamespace(id=99, is_authenticated=True, is_staff=True),
+            token={'is_staff': True},
+        )
+        res_staff = staff_client.get('/market-api/api/market/?all_groups=true')
+        self.assertEqual(res_staff.status_code, 200)
+        self.assertEqual(len(res_staff.data), 2)

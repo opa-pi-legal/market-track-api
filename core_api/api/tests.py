@@ -259,9 +259,14 @@ class WebAppSmokeTests(TestCase):
         UserInGroup.objects.create(group=self.group, user=self.user, role='admin', is_admin=True)
         UserInGroup.objects.create(group=self.group, user=self.staff, role='admin', is_admin=True)
 
-    @patch('web.views.services.fetch_products', return_value=[])
+    @patch('web.views.services.fetch_rabbitmq_queues', return_value=([{'name': 'core_api.events', 'consumers': 1, 'messages_ready': 0, 'state': 'running'}], True))
+    @patch('web.views.services.check_services_health', return_value=[{'name': 'core-api', 'ok': True, 'latency_ms': 1, 'detail': 'HTTP 200', 'endpoint': '/core-api/health/'}])
+    @patch('web.views.services.fetch_all_markets', return_value=[])
+    @patch('web.views.services.fetch_all_products', return_value=[])
     @patch('web.views.publish_event')
-    def test_web_pages_and_moderation_permissions(self, mock_pub, mock_fetch):
+    def test_web_pages_and_moderation_permissions(
+        self, mock_pub, mock_prods, mock_mkts, mock_health, mock_rabbit
+    ):
         c = Client()
         self.assertEqual(c.get('/login/').status_code, 200)
         self.assertEqual(c.get('/').status_code, 302)
@@ -270,9 +275,43 @@ class WebAppSmokeTests(TestCase):
         self.assertEqual(c.get('/').status_code, 200)
         self.assertEqual(c.get('/listas/').status_code, 200)
         self.assertEqual(c.get('/comunidade/?radius_km=25').status_code, 200)
-        # Usuário comum não acessa moderação
+        # Usuário comum não acessa rotas de staff
         self.assertEqual(c.get('/moderacao/').status_code, 403)
+        self.assertEqual(c.get('/curadoria/').status_code, 403)
+        self.assertEqual(c.get('/manutencao/').status_code, 403)
+        self.assertEqual(c.get('/relatorios/csv/').status_code, 403)
 
-        # Staff acessa moderação
+        # Staff acessa Dashboard + CSV + Curadoria + Manutenção
         c.force_login(self.staff)
-        self.assertEqual(c.get('/moderacao/').status_code, 200)
+        self.assertEqual(c.get('/').status_code, 200)
+        self.assertEqual(c.get('/curadoria/').status_code, 200)
+        self.assertEqual(c.get('/manutencao/').status_code, 200)
+
+        res_csv = c.get('/relatorios/csv/')
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn('text/csv', res_csv['Content-Type'])
+
+        # Desbanir usuário
+        self.user.community_banned = True
+        self.user.save(update_fields=['community_banned'])
+        res_unban = c.post(f'/moderacao/usuario/{self.user.id}/desbanir/')
+        self.assertEqual(res_unban.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.community_banned)
+
+        # Limpeza de ofertas expiradas e simulação de alerta RabbitMQ
+        res_clean = c.post('/manutencao/limpar-expiradas/', {'days': '7'})
+        self.assertEqual(res_clean.status_code, 302)
+
+        res_sim = c.post(
+            '/manutencao/simular-alerta/',
+            {
+                'product_name': 'Café Teste',
+                'market_name': 'Atacadão',
+                'price': '12,90',
+                'target_user_id': str(self.user.id),
+            },
+        )
+        self.assertEqual(res_sim.status_code, 302)
+        self.assertTrue(PriceAlert.objects.filter(user=self.user, product_name='Café Teste').exists())
+        mock_pub.assert_called()
