@@ -124,8 +124,9 @@ jobs:
             sudo docker exec product-api_service python manage.py migrate --noinput
             sudo docker exec product-api_service python manage.py seed_global_catalog
 
-            echo "Recarregando nginx-proxy para atualizar IPs internos dos containers recriados..."
-            sudo docker exec nginx-proxy nginx -s reload
+            echo "Reiniciando nginx-proxy para recarregar consul-template e IPs dos containers..."
+            sudo docker restart nginx-proxy
+            sleep 3
 
             echo "Validando healthchecks pós-deploy..."
             curl -fsS --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8090/core-api/health/
