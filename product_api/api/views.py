@@ -59,8 +59,27 @@ class ProductViewSet(viewsets.ModelViewSet):
         added_by = serializer.validated_data.get('added_by')
         user_id = getattr(self.request.user, 'id', None)
         if not added_by:
-            added_by = str(user_id) if user_id is not None else ''
-        instance = serializer.save(added_by=added_by, is_global=False, verified_source='group')
+            added_by = str(user_id) if user_id is not None else 'admin'
+
+        raw_group_id = (serializer.validated_data.get('group_id') or '').strip()
+        wants_global = str(self.request.data.get('is_global', '')).lower() in ('true', '1', 'yes')
+        is_staff = self._is_staff_request()
+
+        if is_staff and (wants_global or not raw_group_id or raw_group_id.lower() == 'global'):
+            group_id = raw_group_id or 'global'
+            is_global = True
+            verified_source = 'admin'
+        else:
+            group_id = raw_group_id or 'global'
+            is_global = False
+            verified_source = 'group'
+
+        instance = serializer.save(
+            added_by=added_by,
+            group_id=group_id,
+            is_global=is_global,
+            verified_source=verified_source,
+        )
         publish_event(
             'activity.product_created',
             {

@@ -9,4 +9,5 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'is_global', 'verified_source', 'created_at', 'last_updated']
         extra_kwargs = {
             'added_by': {'required': False, 'allow_blank': True},
+            'group_id': {'required': False, 'allow_blank': True},
         }
