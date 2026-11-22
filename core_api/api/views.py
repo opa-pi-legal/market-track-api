@@ -142,6 +142,9 @@ class GroupViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.request.user and self.request.user.is_authenticated:
+            all_groups = str(self.request.query_params.get('all_groups', '')).lower() in ('true', '1', 'yes')
+            if self.request.user.is_staff and all_groups:
+                return Groups.objects.all().order_by('-created_at')
             return Groups.objects.filter(members__user=self.request.user).distinct()
         return Groups.objects.none()
 
@@ -180,11 +183,15 @@ class UserInGroupViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if not (self.request.user and self.request.user.is_authenticated):
             return UserInGroup.objects.none()
-        queryset = (
-            UserInGroup.objects.select_related('user', 'group')
-            .filter(group__members__user=self.request.user)
-            .distinct()
-        )
+        all_groups = str(self.request.query_params.get('all_groups', '')).lower() in ('true', '1', 'yes')
+        if self.request.user.is_staff and (all_groups or self.action in ('retrieve', 'destroy', 'update', 'partial_update')):
+            queryset = UserInGroup.objects.select_related('user', 'group').all()
+        else:
+            queryset = (
+                UserInGroup.objects.select_related('user', 'group')
+                .filter(group__members__user=self.request.user)
+                .distinct()
+            )
         group_id = self.request.query_params.get('group') or self.request.query_params.get('group_id')
         user_id = self.request.query_params.get('user') or self.request.query_params.get('user_id')
         if group_id:
@@ -349,17 +356,44 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if not (self.request.user and self.request.user.is_authenticated):
             return ShoppingList.objects.none()
-        queryset = ShoppingList.objects.filter(group__members__user=self.request.user).distinct()
+        all_groups = str(self.request.query_params.get('all_groups', '')).lower() in ('true', '1', 'yes')
+        if self.request.user.is_staff and (all_groups or self.action in ('retrieve', 'destroy', 'update', 'partial_update')):
+            queryset = (
+                ShoppingList.objects.select_related('owner', 'group')
+                .prefetch_related('items', 'group__members__user')
+                .all()
+            )
+        else:
+            queryset = (
+                ShoppingList.objects.select_related('owner', 'group')
+                .prefetch_related('items', 'group__members__user')
+                .filter(group__members__user=self.request.user)
+                .distinct()
+            )
         group_id = self.request.query_params.get('group') or self.request.query_params.get('group_id')
         owner_id = self.request.query_params.get('owner') or self.request.query_params.get('owner_id')
         status_param = self.request.query_params.get('status')
+        q = (self.request.query_params.get('q') or '').strip()
         if group_id:
             queryset = queryset.filter(group_id=group_id)
         if owner_id:
             queryset = queryset.filter(owner_id=owner_id)
         if status_param:
             queryset = queryset.filter(status=status_param)
-        return queryset
+        if q:
+            q_clean = q.lstrip('#').strip()
+            search_q = (
+                Q(name__icontains=q)
+                | Q(group__name__icontains=q)
+                | Q(owner__username__icontains=q)
+                | Q(owner__email__icontains=q)
+                | Q(group__members__user__username__icontains=q)
+                | Q(group__members__user__email__icontains=q)
+            )
+            if q_clean.isdigit():
+                search_q = search_q | Q(id=int(q_clean))
+            queryset = queryset.filter(search_q).distinct()
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         owner = serializer.validated_data.get('owner')
@@ -385,9 +419,13 @@ class ShoppingListItemViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if not (self.request.user and self.request.user.is_authenticated):
             return ShoppingListItem.objects.none()
-        queryset = ShoppingListItem.objects.filter(
-            shopping_list__group__members__user=self.request.user
-        ).distinct()
+        all_groups = str(self.request.query_params.get('all_groups', '')).lower() in ('true', '1', 'yes')
+        if self.request.user.is_staff and (all_groups or self.action in ('retrieve', 'destroy', 'update', 'partial_update')):
+            queryset = ShoppingListItem.objects.all()
+        else:
+            queryset = ShoppingListItem.objects.filter(
+                shopping_list__group__members__user=self.request.user
+            ).distinct()
         shopping_list_id = (
             self.request.query_params.get('shopping_list')
             or self.request.query_params.get('shopping_list_id')

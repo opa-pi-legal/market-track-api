@@ -94,6 +94,12 @@ class PriceRecordSerializer(serializers.ModelSerializer):
 
 
 class ShoppingListSerializer(serializers.ModelSerializer):
+    owner_username = serializers.SerializerMethodField()
+    owner_email = serializers.SerializerMethodField()
+    group_name = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField()
+    member_names = serializers.SerializerMethodField()
+
     class Meta:
         model = ShoppingList
         fields = '__all__'
@@ -101,6 +107,31 @@ class ShoppingListSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'owner': {'required': False, 'allow_null': True},
         }
+
+    def get_owner_username(self, obj) -> str:
+        return obj.owner.username if obj.owner else ''
+
+    def get_owner_email(self, obj) -> str:
+        return obj.owner.email if obj.owner else ''
+
+    def get_group_name(self, obj) -> str:
+        return obj.group.name if obj.group else ''
+
+    def get_items_count(self, obj) -> int:
+        return len(obj.items.all())
+
+    def get_member_names(self, obj) -> list[str]:
+        if not obj.group:
+            return []
+        names = []
+        for membership in obj.group.members.all():
+            user = getattr(membership, 'user', None)
+            if user:
+                if user.username:
+                    names.append(user.username)
+                if user.email:
+                    names.append(user.email)
+        return names
 
 
 class ShoppingListItemSerializer(serializers.ModelSerializer):
