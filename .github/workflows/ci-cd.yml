@@ -117,16 +117,19 @@ jobs:
             sudo docker compose up -d --build core-api market-api product-api nginx
 
             echo "Aguardando containers ficarem prontos..."
-            sleep 6
+            sleep 8
 
             sudo docker exec core_api_service python manage.py migrate --noinput
             sudo docker exec market_api_service python manage.py migrate --noinput
             sudo docker exec product-api_service python manage.py migrate --noinput
             sudo docker exec product-api_service python manage.py seed_global_catalog
 
+            echo "Recarregando nginx-proxy para atualizar IPs internos dos containers recriados..."
+            sudo docker exec nginx-proxy nginx -s reload
+
             echo "Validando healthchecks pós-deploy..."
-            curl -fsS http://127.0.0.1:8090/core-api/health/
-            curl -fsS http://127.0.0.1:8090/market-api/health/
-            curl -fsS http://127.0.0.1:8090/product-api/health/
-            curl -fsS -o /dev/null http://127.0.0.1:8090/login/
+            curl -fsS --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8090/core-api/health/
+            curl -fsS --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8090/market-api/health/
+            curl -fsS --retry 10 --retry-delay 2 --retry-all-errors http://127.0.0.1:8090/product-api/health/
+            curl -fsS --retry 10 --retry-delay 2 --retry-all-errors -o /dev/null http://127.0.0.1:8090/login/
             echo "Deploy concluído com sucesso!"
