@@ -12,6 +12,8 @@ from api.models import (
     PriceAlert,
     PriceRecord,
     ShoppingListItem,
+    User,
+    UserInGroup,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,6 +78,28 @@ def _handle_offer_published(payload: dict) -> None:
             discount_percent=offer.discount_percent,
             message=f'Oferta encontrada: {offer.product_name} por R$ {valor} no {offer.market_name}!',
         )
+
+    # Modo simulador (Staff): garante entrega de alerta via RabbitMQ aos usuários no app mobile
+    if payload.get('broadcast_alert'):
+        notified_user_ids = set(
+            UserInGroup.objects.filter(group_id__in=seen_groups).values_list('user_id', flat=True)
+        )
+        valor = f'{offer.price_cents / 100:.2f}'.replace('.', ',')
+        desc_txt = f' (-{offer.discount_percent}%)' if offer.discount_percent else ''
+        msg = f'Oferta encontrada: {offer.product_name} por R$ {valor}{desc_txt} no {offer.market_name}!'
+        for uid in User.objects.filter(is_active=True).exclude(id__in=notified_user_ids).values_list('id', flat=True):
+            PriceAlert.objects.create(
+                user_id=uid,
+                group=None,
+                offer=offer,
+                ean=offer.ean,
+                product_name=offer.product_name,
+                market_name=offer.market_name,
+                previous_price_cents=offer.reference_avg_cents,
+                new_price_cents=offer.price_cents,
+                discount_percent=offer.discount_percent,
+                message=msg,
+            )
 
 
 def _handle_offer_voted(payload: dict) -> None:

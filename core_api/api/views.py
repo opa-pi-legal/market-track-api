@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -75,6 +75,65 @@ class UserViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='staff', permission_classes=[IsAuthenticated, IsAdminUser])
+    def staff_list(self, request):
+        staff_qs = User.objects.filter(is_staff=True).order_by('-date_joined')
+        return Response(UserSerializer(staff_qs, many=True).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='create-staff', permission_classes=[IsAuthenticated, IsAdminUser])
+    def create_staff(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        username = (request.data.get('username') or '').strip()
+        password = request.data.get('password') or ''
+
+        if not email or '@' not in email:
+            return Response(
+                {'detail': 'Informe um e-mail válido para a conta Staff.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing = User.objects.filter(email__iexact=email).first()
+        if existing:
+            existing.is_staff = True
+            update_fields = ['is_staff']
+            if username and existing.username != username and not User.objects.filter(username__iexact=username).exclude(pk=existing.pk).exists():
+                existing.username = username
+                update_fields.append('username')
+            if password:
+                if len(password) < 6:
+                    return Response(
+                        {'detail': 'A senha deve ter pelo menos 6 caracteres.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                existing.set_password(password)
+                update_fields.append('password')
+            existing.save(update_fields=update_fields)
+            return Response(
+                {'created': False, 'user': UserSerializer(existing).data},
+                status=status.HTTP_200_OK,
+            )
+
+        if len(password) < 6:
+            return Response(
+                {'detail': 'Para criar uma nova conta Staff, informe uma senha com pelo menos 6 caracteres.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        final_username = username or email.split('@')[0]
+        if User.objects.filter(username__iexact=final_username).exists():
+            final_username = f'{final_username}_{uuid.uuid4().hex[:4]}'
+
+        user = User.objects.create_user(
+            username=final_username,
+            email=email,
+            password=password,
+            is_staff=True,
+        )
+        return Response(
+            {'created': True, 'user': UserSerializer(user).data},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -542,6 +601,7 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
                 'longitude': offer.longitude,
                 'group_id': offer.group_id,
                 'reported_by_id': user.id,
+                'broadcast_alert': bool(user.is_staff and self.request.data.get('broadcast_alert')),
             },
         )
 
@@ -777,6 +837,7 @@ class GoogleLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        staff_only = bool(request.data.get('staff_only', False))
         username = (
             request.data.get('username')
             or request.data.get('display_name')
@@ -785,7 +846,19 @@ class GoogleLoginView(APIView):
         photo_url = request.data.get('photo_url')
 
         user = User.objects.filter(email__iexact=email).first()
-        if not user:
+        if staff_only:
+            if not user or not user.is_staff:
+                return Response(
+                    {
+                        'detail': 'Acesso restrito: apenas contas com permissão de Staff podem acessar o painel web.',
+                        'error': 'staff-required',
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if photo_url and user.photo_url != photo_url:
+                user.photo_url = photo_url
+                user.save(update_fields=['photo_url', 'updated_at'])
+        elif not user:
             if User.objects.filter(username__iexact=username).exists():
                 username = f'{username}_{uuid.uuid4().hex[:6]}'
             user = User.objects.create_user(
