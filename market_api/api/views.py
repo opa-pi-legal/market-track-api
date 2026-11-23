@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.http import HttpResponse
 from rest_framework import viewsets
 from .messaging import publish_event
@@ -22,18 +23,29 @@ class MarketViewSet(viewsets.ModelViewSet):
         if self.action == 'list' and not group_id and not (all_groups and self._is_staff_request()):
             return queryset.none()
         status_param = self.request.query_params.get('status')
-        if group_id:
+        q = (self.request.query_params.get('q') or '').strip()
+        if group_id and not (all_groups and self._is_staff_request()):
+            queryset = queryset.filter(Q(group_id=str(group_id)) | Q(group_id='global'))
+        elif group_id:
             queryset = queryset.filter(group_id=str(group_id))
         if status_param:
             queryset = queryset.filter(status=status_param)
+        if q:
+            queryset = queryset.filter(
+                Q(name__icontains=q)
+                | Q(brand__icontains=q)
+                | Q(city__icontains=q)
+                | Q(address__icontains=q)
+            )
         return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         added_by = serializer.validated_data.get('added_by')
         user_id = getattr(self.request.user, 'id', None)
         if not added_by:
-            added_by = str(user_id) if user_id is not None else ''
-        instance = serializer.save(added_by=added_by)
+            added_by = str(user_id) if user_id is not None else 'admin'
+        group_id = (serializer.validated_data.get('group_id') or '').strip() or 'global'
+        instance = serializer.save(added_by=added_by, group_id=group_id)
         publish_event(
             'activity.market_created',
             {

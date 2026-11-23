@@ -21,6 +21,8 @@ class MarketSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
         extra_kwargs = {
             'added_by': {'required': False, 'allow_blank': True},
+            'group_id': {'required': False, 'allow_blank': True},
             'brand': {'required': False, 'allow_blank': True},
             'address': {'required': False, 'allow_blank': True},
+            'city': {'required': False, 'allow_blank': True},
         }
