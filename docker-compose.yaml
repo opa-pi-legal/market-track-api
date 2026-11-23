@@ -48,7 +48,7 @@ services:
     hostname: rebbitmq
     ports:
       - "127.0.0.1:5672:5672"
-      - "127.0.0.1:15672:15672"
+      - "15672:15672"
     env_file: ".env"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
