@@ -1,7 +1,12 @@
+import json
 import logging
+import urllib.request
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db.models import Avg, Min
+from django.utils import timezone
+from rest_framework_simplejwt.tokens import AccessToken
 
 from api.messaging import start_consumer
 from api.models import (
@@ -154,10 +159,28 @@ def _handle_offer_flagged(payload: dict) -> None:
             offer.reported_by.save(update_fields=['community_banned', 'updated_at'])
 
 
+def _resolve_remote_name(url: str) -> str:
+    try:
+        headers = {'Accept': 'application/json'}
+        staff_user = User.objects.filter(is_active=True, is_staff=True).first() or User.objects.filter(is_active=True).first()
+        if staff_user is not None:
+            token = AccessToken.for_user(staff_user)
+            headers['Authorization'] = f'Bearer {str(token)}'
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode('utf-8'))
+                if isinstance(data, dict):
+                    return str(data.get('name') or '').strip()
+    except Exception:
+        return ''
+    return ''
+
+
 def _handle_price_recorded(payload: dict) -> None:
     group_id = payload.get('group_id')
-    product_id = str(payload.get('product_id', ''))
-    market_id = str(payload.get('market_id', ''))
+    product_id = str(payload.get('product_id', '')).strip()
+    market_id = str(payload.get('market_id', '')).strip()
     price_cents = int(payload.get('price_cents', 0))
     is_promotion = bool(payload.get('is_promotion', False))
     record_id = payload.get('record_id')
@@ -171,6 +194,49 @@ def _handle_price_recorded(payload: dict) -> None:
 
     prev_min = prev_qs.aggregate(min_p=Min('price_cents'))['min_p']
     if (prev_min is not None and price_cents < prev_min) or is_promotion:
+        product_name = str(payload.get('product_name') or '').strip()
+        if not product_name and product_id:
+            product_name = (
+                ShoppingListItem.objects.filter(product_id=product_id)
+                .exclude(product_name='')
+                .values_list('product_name', flat=True)
+                .first()
+                or CommunityOffer.objects.filter(ean=product_id)
+                .exclude(product_name='')
+                .values_list('product_name', flat=True)
+                .first()
+                or ''
+            ).strip()
+        if not product_name and product_id.isdigit():
+            product_name = _resolve_remote_name(f'http://product-api:8004/api/product/{product_id}/')
+        if not product_name:
+            product_name = 'Produto'
+
+        market_name = str(payload.get('market_name') or '').strip()
+        if not market_name and market_id:
+            market_name = (
+                CommunityOffer.objects.filter(market_id=market_id)
+                .exclude(market_name='')
+                .values_list('market_name', flat=True)
+                .first()
+                or ''
+            ).strip()
+        if not market_name and market_id.isdigit():
+            market_name = _resolve_remote_name(f'http://market-api:8002/api/market/{market_id}/')
+        if not market_name:
+            market_name = 'Supermercado'
+
+        # Evita duplicação caso o mesmo registro gere CommunityOffer + PriceRecord na sequência
+        recent_cutoff = timezone.now() - timedelta(seconds=60)
+        already_alerted = PriceAlert.objects.filter(
+            group_id=group_id,
+            product_name__iexact=product_name,
+            new_price_cents=price_cents,
+            created_at__gte=recent_cutoff,
+        ).exists()
+        if already_alerted:
+            return
+
         discount = (
             int(round((prev_min - price_cents) * 100 / prev_min))
             if prev_min and price_cents < prev_min
@@ -179,12 +245,12 @@ def _handle_price_recorded(payload: dict) -> None:
         valor = f'{price_cents / 100:.2f}'.replace('.', ',')
         PriceAlert.objects.create(
             group_id=group_id,
-            product_name=f'Produto #{product_id}',
-            market_name=f'Mercado #{market_id}',
+            product_name=product_name,
+            market_name=market_name,
             previous_price_cents=prev_min,
             new_price_cents=price_cents,
             discount_percent=max(0, discount),
-            message=f'Alerta de preço: Produto #{product_id} por R$ {valor}!',
+            message=f'Menor preço registrado: {product_name} por R$ {valor} em {market_name}!',
         )
 
 

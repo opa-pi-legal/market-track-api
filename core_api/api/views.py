@@ -325,6 +325,8 @@ class PriceRecordViewSet(viewsets.ModelViewSet):
             recorded_by = self.request.user
         record = serializer.save(recorded_by=recorded_by)
         user_id = str(recorded_by.id) if recorded_by else None
+        product_name = (self.request.data.get('product_name') or '').strip()
+        market_name = (self.request.data.get('market_name') or '').strip()
         publish_event(
             'price.recorded',
             {
@@ -332,11 +334,14 @@ class PriceRecordViewSet(viewsets.ModelViewSet):
                 'group_id': str(record.group_id),
                 'product_id': str(record.product_id),
                 'market_id': str(record.market_id),
+                'product_name': product_name,
+                'market_name': market_name,
                 'price_cents': record.price_cents,
                 'is_promotion': record.is_promotion,
                 'recorded_by_id': user_id,
             },
         )
+        label = f'{product_name} ' if product_name else ''
         publish_event(
             'activity.price_recorded',
             {
@@ -344,7 +349,7 @@ class PriceRecordViewSet(viewsets.ModelViewSet):
                 'user_id': user_id,
                 'entity_type': 'price_record',
                 'entity_id': str(record.id),
-                'description': f'Preço de R$ {record.price_cents / 100:.2f} registrado',
+                'description': f'Preço {label}de R$ {record.price_cents / 100:.2f} registrado',
             },
         )
 
@@ -558,13 +563,14 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
         if ean:
             queryset = queryset.filter(ean=ean)
         if q:
-            queryset = queryset.filter(
-                Q(product_name__icontains=q)
-                | Q(brand__icontains=q)
-                | Q(market_name__icontains=q)
-                | Q(city__icontains=q)
-                | Q(ean__icontains=q)
-            )
+            for token in [t.strip() for t in q.split() if t.strip()]:
+                queryset = queryset.filter(
+                    Q(product_name__icontains=token)
+                    | Q(brand__icontains=token)
+                    | Q(market_name__icontains=token)
+                    | Q(city__icontains=token)
+                    | Q(ean__icontains=token)
+                )
 
         lat, lng, radius_km = self._parse_geo_params()
         strict_geo = self.request.query_params.get('strict_geo', 'false').lower() in ('true', '1', 'yes')

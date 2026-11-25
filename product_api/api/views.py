@@ -50,9 +50,13 @@ class ProductViewSet(viewsets.ModelViewSet):
         if status_param:
             queryset = queryset.filter(status=status_param)
         if q:
-            queryset = queryset.filter(
-                Q(name__icontains=q) | Q(brand__icontains=q) | Q(barcode__icontains=q)
-            )
+            for token in [t.strip() for t in q.split() if t.strip()]:
+                queryset = queryset.filter(
+                    Q(name__icontains=token)
+                    | Q(brand__icontains=token)
+                    | Q(barcode__icontains=token)
+                    | Q(category__icontains=token)
+                )
         return queryset.order_by('-is_global', 'name')
 
     def perform_create(self, serializer):
