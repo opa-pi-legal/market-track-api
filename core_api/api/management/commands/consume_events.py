@@ -76,7 +76,7 @@ def _handle_offer_published(payload: dict) -> None:
             previous_price_cents=offer.reference_avg_cents,
             new_price_cents=offer.price_cents,
             discount_percent=offer.discount_percent,
-            message=f'Oferta encontrada: {offer.product_name} por R$ {valor} no {offer.market_name}!',
+            message=f'Menor preço encontrado: {offer.product_name} por R$ {valor} no {offer.market_name}!',
         )
 
     # Modo simulador (Staff): garante entrega de alerta via RabbitMQ aos usuários no app mobile
@@ -86,7 +86,7 @@ def _handle_offer_published(payload: dict) -> None:
         )
         valor = f'{offer.price_cents / 100:.2f}'.replace('.', ',')
         desc_txt = f' (-{offer.discount_percent}%)' if offer.discount_percent else ''
-        msg = f'Oferta encontrada: {offer.product_name} por R$ {valor}{desc_txt} no {offer.market_name}!'
+        msg = f'Menor preço encontrado: {offer.product_name} por R$ {valor}{desc_txt} no {offer.market_name}!'
         for uid in User.objects.filter(is_active=True).exclude(id__in=notified_user_ids).values_list('id', flat=True):
             PriceAlert.objects.create(
                 user_id=uid,
@@ -112,7 +112,8 @@ def _handle_offer_voted(payload: dict) -> None:
     reports_count = OfferVote.objects.filter(offer=offer, vote_type='expired').count()
     offer.confirmations_count = confirmations_count
     offer.reports_count = reports_count
-    if reports_count >= 3 and reports_count > confirmations_count:
+    trust_score = confirmations_count - reports_count
+    if (reports_count >= 3 and reports_count > confirmations_count) or trust_score <= -2:
         offer.is_active = False
     offer.save(update_fields=['confirmations_count', 'reports_count', 'is_active', 'updated_at'])
 

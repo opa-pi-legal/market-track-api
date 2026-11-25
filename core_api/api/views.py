@@ -1,6 +1,6 @@
 import uuid
 from datetime import timedelta
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -532,6 +532,7 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
 
         scope = (self.request.query_params.get('scope') or '').strip().lower()
         group_id = self.request.query_params.get('group') or self.request.query_params.get('group_id')
+        market_id = (self.request.query_params.get('market_id') or '').strip()
         category = (self.request.query_params.get('category') or '').strip()
         city = (self.request.query_params.get('city') or '').strip()
         ean = (self.request.query_params.get('ean') or '').strip()
@@ -548,6 +549,8 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
                 group__members__user=self.request.user,
             ).distinct()
 
+        if market_id:
+            queryset = queryset.filter(market_id=market_id)
         if category:
             queryset = queryset.filter(category__iexact=category)
         if city:
@@ -577,7 +580,9 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
                 geo_q = geo_q | Q(latitude__isnull=True) | Q(longitude__isnull=True)
             queryset = queryset.filter(geo_q)
 
-        return queryset.order_by('-is_promotion', '-discount_percent', '-created_at')
+        return queryset.annotate(
+            _trust_score=F('confirmations_count') - F('reports_count')
+        ).order_by('-_trust_score', '-confirmations_count', '-created_at')
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -653,11 +658,16 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        OfferVote.objects.update_or_create(
-            offer=offer,
-            user=request.user,
-            defaults={'vote_type': vote_type},
-        )
+        existing_vote = OfferVote.objects.filter(offer=offer, user=request.user).first()
+        if existing_vote and existing_vote.vote_type == vote_type and vote_type != 'abuse':
+            existing_vote.delete()
+        else:
+            OfferVote.objects.update_or_create(
+                offer=offer,
+                user=request.user,
+                defaults={'vote_type': vote_type},
+            )
+
         confirmations_count = OfferVote.objects.filter(offer=offer, vote_type='confirm').count()
         reports_count = OfferVote.objects.filter(offer=offer, vote_type='expired').count()
         abuse_reports_count = OfferVote.objects.filter(offer=offer, vote_type='abuse').count()
@@ -666,10 +676,15 @@ class CommunityOfferViewSet(viewsets.ModelViewSet):
         offer.abuse_reports_count = abuse_reports_count
 
         update_fields = ['confirmations_count', 'reports_count', 'abuse_reports_count', 'updated_at']
+        trust_score = confirmations_count - reports_count
+
         if vote_type == 'abuse' and (abuse_reports_count >= 2 or request.user.is_staff):
             offer.is_active = False
             offer.moderation_status = 'flagged'
             update_fields.extend(['is_active', 'moderation_status'])
+        elif (reports_count >= 3 and reports_count > confirmations_count) or trust_score <= -2:
+            offer.is_active = False
+            update_fields.append('is_active')
 
         offer.save(update_fields=update_fields)
 

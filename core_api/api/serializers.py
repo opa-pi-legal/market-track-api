@@ -1,4 +1,5 @@
 import uuid
+from django.utils import timezone
 from rest_framework import serializers
 from .moderation import (
     contains_inappropriate_content,
@@ -187,6 +188,10 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
     is_mine = serializers.SerializerMethodField()
     distance_km = serializers.SerializerMethodField()
     reported_by_name = serializers.SerializerMethodField()
+    trust_score = serializers.SerializerMethodField()
+    is_verified_price = serializers.SerializerMethodField()
+    is_stale = serializers.SerializerMethodField()
+    age_days = serializers.SerializerMethodField()
 
     class Meta:
         model = CommunityOffer
@@ -197,6 +202,8 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
             'brand',
             'category',
             'market_name',
+            'market_id',
+            'market_address',
             'city',
             'latitude',
             'longitude',
@@ -214,6 +221,10 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
             'is_mine',
             'distance_km',
             'reported_by_name',
+            'trust_score',
+            'is_verified_price',
+            'is_stale',
+            'age_days',
             'created_at',
         ]
         read_only_fields = [
@@ -229,6 +240,10 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
             'is_mine',
             'distance_km',
             'reported_by_name',
+            'trust_score',
+            'is_verified_price',
+            'is_stale',
+            'age_days',
             'created_at',
         ]
 
@@ -279,6 +294,23 @@ class CommunityOfferSerializer(serializers.ModelSerializer):
         if not obj.reported_by:
             return 'Comunidade'
         return obj.reported_by.first_name or obj.reported_by.username
+
+    def get_trust_score(self, obj) -> int:
+        return int(obj.confirmations_count or 0) - int(obj.reports_count or 0)
+
+    def get_is_verified_price(self, obj) -> bool:
+        conf = int(obj.confirmations_count or 0)
+        rep = int(obj.reports_count or 0)
+        return conf >= 3 and conf > rep
+
+    def get_age_days(self, obj) -> int:
+        if not obj.created_at:
+            return 0
+        delta = timezone.now() - obj.created_at
+        return max(0, delta.days)
+
+    def get_is_stale(self, obj) -> bool:
+        return self.get_age_days(obj) >= 7
 
 
 class PriceAlertSerializer(serializers.ModelSerializer):

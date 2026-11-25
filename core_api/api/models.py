@@ -170,6 +170,8 @@ class CommunityOffer(models.Model):
     brand = models.CharField(max_length=128, blank=True, default='')
     category = models.CharField(max_length=64, default='Geral')
     market_name = models.CharField(max_length=128)
+    market_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    market_address = models.CharField(max_length=255, blank=True, default='')
     city = models.CharField(max_length=100, blank=True, default='')
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
